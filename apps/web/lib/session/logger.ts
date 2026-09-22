@@ -2,26 +2,15 @@
 // Client-side session logging for interview interactions
 import type {
   CreateSessionRequest,
-  LogMessageRequest,
   UpdateSessionRequest,
-  InterviewSession,
   SessionTimingData,
   MessageMetadata,
   AIProvider,
   DomainId,
 } from "@devdocs/shared";
-
-const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
+import { makeTRPCClient } from "@/lib/trpc";
 
 type TokenGetter = () => Promise<string | null>;
-
-async function authHeaders(getToken: TokenGetter): Promise<HeadersInit> {
-  const token = await getToken();
-  return {
-    "content-type": "application/json",
-    authorization: token ? `Bearer ${token}` : "",
-  };
-}
 
 export class SessionLogger {
   private sessionId: string | null = null;
@@ -38,15 +27,7 @@ export class SessionLogger {
    */
   async startSession(request: CreateSessionRequest): Promise<string | null> {
     try {
-      const res = await fetch(`${API_BASE}/sessions`, {
-        method: "POST",
-        headers: await authHeaders(this.getToken),
-        body: JSON.stringify(request),
-      });
-
-      if (!res.ok) return null;
-
-      const session = (await res.json()) as InterviewSession;
+      const session = await makeTRPCClient(this.getToken).sessions.create.mutate(request);
       this.sessionId = session.id;
       return session.id;
     } catch (error) {
@@ -101,10 +82,7 @@ export class SessionLogger {
     if (!this.sessionId) return;
 
     try {
-      await fetch(`${API_BASE}/sessions/messages`, {
-        method: "POST",
-        headers: await authHeaders(this.getToken),
-        body: JSON.stringify({
+      await makeTRPCClient(this.getToken).sessions.logMessage.mutate({
           sessionId: this.sessionId,
           role: "user",
           content,
@@ -115,9 +93,8 @@ export class SessionLogger {
           totalDurationMs: null,
           tokensUsed: null,
           errorType: null,
-          metadata,
-        } as LogMessageRequest),
-      });
+          metadata: metadata as Record<string, unknown> | null,
+        });
     } catch (error) {
       console.error("Failed to log user message:", error);
     }
@@ -138,10 +115,7 @@ export class SessionLogger {
     const timings = this.calculateTimings();
 
     try {
-      await fetch(`${API_BASE}/sessions/messages`, {
-        method: "POST",
-        headers: await authHeaders(this.getToken),
-        body: JSON.stringify({
+      await makeTRPCClient(this.getToken).sessions.logMessage.mutate({
           sessionId: this.sessionId,
           role: "assistant",
           content,
@@ -152,9 +126,8 @@ export class SessionLogger {
           totalDurationMs: timings.totalDurationMs,
           tokensUsed: null, // TODO: Extract from AI response if available
           errorType,
-          metadata,
-        } as LogMessageRequest),
-      });
+          metadata: metadata as Record<string, unknown> | null,
+        });
     } catch (error) {
       console.error("Failed to log assistant message:", error);
     } finally {
@@ -170,10 +143,9 @@ export class SessionLogger {
     if (!this.sessionId) return;
 
     try {
-      await fetch(`${API_BASE}/sessions/${this.sessionId}`, {
-        method: "PATCH",
-        headers: await authHeaders(this.getToken),
-        body: JSON.stringify(updates),
+      await makeTRPCClient(this.getToken).sessions.update.mutate({
+        sessionId: this.sessionId,
+        ...updates,
       });
     } catch (error) {
       console.error("Failed to update session:", error);

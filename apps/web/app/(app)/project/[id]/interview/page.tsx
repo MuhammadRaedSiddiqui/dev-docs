@@ -50,20 +50,43 @@ export default function InterviewPage({ params }: { params: { id: string } }) {
   const saveInterview = trpc.projects.update.useMutation();
   const queuedSave = useRef<Parameters<typeof saveInterview.mutateAsync>[0] | null>(null);
   const saveInFlight = useRef(false);
+  const retryTimer = useRef<number | null>(null);
+  const saveRetryCount = useRef(0);
+  const activeProjectId = useRef(params.id);
+  const saveInterviewAsync = saveInterview.mutateAsync;
 
   const flushQueuedSave = useCallback(async () => {
     if (saveInFlight.current || !queuedSave.current) return;
+
+    if (retryTimer.current) {
+      window.clearTimeout(retryTimer.current);
+      retryTimer.current = null;
+    }
 
     const nextSave = queuedSave.current;
     queuedSave.current = null;
     saveInFlight.current = true;
     let succeeded = false;
     try {
-      await saveInterview.mutateAsync(nextSave);
+      await saveInterviewAsync(nextSave);
       succeeded = true;
+      saveRetryCount.current = 0;
     } catch {
-      // Preserve the latest snapshot so a subsequent state change can retry it.
-      if (!queuedSave.current) queuedSave.current = nextSave;
+      // Preserve the latest snapshot and retry even if the user makes no
+      // further state changes. Never requeue a save for a project left behind.
+      if (activeProjectId.current === nextSave.id) {
+        if (!queuedSave.current) queuedSave.current = nextSave;
+        saveRetryCount.current += 1;
+        if (saveRetryCount.current <= 5) {
+          const delay = Math.min(1_000 * 2 ** (saveRetryCount.current - 1), 8_000);
+          retryTimer.current = window.setTimeout(() => {
+            retryTimer.current = null;
+            void flushQueuedSave();
+          }, delay);
+        } else {
+          toast("Interview changes could not be saved. Check your connection and try again.", "error");
+        }
+      }
     } finally {
       saveInFlight.current = false;
     }
@@ -71,20 +94,34 @@ export default function InterviewPage({ params }: { params: { id: string } }) {
     if (succeeded && queuedSave.current) {
       void flushQueuedSave();
     }
-  }, [saveInterview.mutateAsync]);
+  }, [saveInterviewAsync, toast]);
 
   const pct = Math.round(store.completedDomains.length / store.activeDomains.length * 100);
 
   useEffect(() => {
+    activeProjectId.current = params.id;
+    queuedSave.current = null;
+    saveRetryCount.current = 0;
+    if (retryTimer.current) {
+      window.clearTimeout(retryTimer.current);
+      retryTimer.current = null;
+    }
     hasHydrated.current = false;
     setHydrated(false);
-    store.reset();
+    useInterviewStore.getState().reset();
+    return () => {
+      if (retryTimer.current) window.clearTimeout(retryTimer.current);
+    };
   }, [params.id]);
 
   useEffect(() => {
     if (!projectQuery.data || hasHydrated.current) return;
 
     const saved = readSavedInterviewData(projectQuery.data.interviewData);
+    const canonicalContent = Object.fromEntries(
+      (projectQuery.data.documents ?? []).map(document => [document.domainId, document.content]),
+    ) as Partial<Record<DomainId, string>>;
+    const restoredContent = { ...(saved?.domainContent ?? {}), ...canonicalContent };
 
     // Set up token getter and project ID immediately
     store.setProjectId(params.id);
@@ -95,13 +132,15 @@ export default function InterviewPage({ params }: { params: { id: string } }) {
     if (config) store.setProvider(config.provider);
 
     if (saved?.lockedContext) {
-      const hasHistory = (saved.conversationHistory ?? []).length > 0;
-      if (hasHistory) {
+      const hasProgress = (saved.conversationHistory ?? []).length > 0
+        || (saved.completedDomains ?? []).length > 0
+        || Object.keys(restoredContent).length > 0;
+      if (hasProgress) {
         store.resumeFromSaved({
           lockedContext: saved.lockedContext,
           lockedChoices: saved.lockedChoices ?? {},
           completedDomains: saved.completedDomains ?? [],
-          domainContent: saved.domainContent ?? {},
+          domainContent: restoredContent,
           conversationHistory: saved.conversationHistory ?? [],
           elaboration: saved.elaboration ?? "",
         });
@@ -135,18 +174,19 @@ export default function InterviewPage({ params }: { params: { id: string } }) {
       queuedSave.current = {
         id: params.id,
         data: {
+          status: store.isComplete ? "complete" : "in_progress",
           interviewData: {
             lockedContext: store.lockedContext,
             lockedChoices: store.lockedChoices,
             completedDomains: store.completedDomains,
-            domainContent: store.domainContent,
             conversationHistory: store.messages,
             elaboration: store.elaboration,
           },
         },
       };
+      if (!saveInFlight.current) saveRetryCount.current = 0;
       void flushQueuedSave();
-    }, 500);
+    }, store.isComplete ? 0 : 500);
 
     return () => window.clearTimeout(timeout);
   }, [
@@ -155,9 +195,9 @@ export default function InterviewPage({ params }: { params: { id: string } }) {
     store.lockedContext,
     store.lockedChoices,
     store.completedDomains,
-    store.domainContent,
     store.messages,
     store.elaboration,
+    store.isComplete,
     flushQueuedSave,
   ]);
 

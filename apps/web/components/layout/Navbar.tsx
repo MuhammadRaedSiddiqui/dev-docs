@@ -1,11 +1,12 @@
 "use client";
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useMemo } from "react";
 import Link from "next/link";
 import { useUser, useClerk } from "@clerk/nextjs";
 import { cn } from "@/lib/utils";
-import { MOCK_PROJECTS } from "@/lib/mock-projects";
 import { buildLibraryDocs } from "@/lib/docs-library";
 import { SearchModal } from "@/components/layout/SearchModal";
+import { trpc } from "@/lib/trpc";
+import type { Project } from "@/lib/types";
 
 interface NavbarProps { active?: "projects" | "templates" | "docs"; userEmail?: string; userInitial?: string; }
 
@@ -21,6 +22,12 @@ export function Navbar({ active }: Omit<NavbarProps, 'userEmail' | 'userInitial'
   const ref = useRef<HTMLDivElement>(null);
   const { user } = useUser();
   const { signOut } = useClerk();
+  const projectsQuery = trpc.projects.list.useQuery(undefined, { enabled: searchOpen });
+  const documentsQuery = trpc.documents.list.useQuery(undefined, { enabled: searchOpen });
+  const documents = useMemo(
+    () => buildLibraryDocs(documentsQuery.data ?? []),
+    [documentsQuery.data],
+  );
 
   const userEmail = user?.primaryEmailAddress?.emailAddress || "user@devdocs.ai";
   const userInitial = user?.firstName?.[0] || user?.emailAddresses[0]?.emailAddress[0]?.toUpperCase() || "U";
@@ -74,8 +81,8 @@ export function Navbar({ active }: Omit<NavbarProps, 'userEmail' | 'userInitial'
       <SearchModal
         open={searchOpen}
         onClose={() => setSearchOpen(false)}
-        projects={MOCK_PROJECTS}
-        docs={buildLibraryDocs()}
+        projects={(projectsQuery.data ?? []) as Project[]}
+        docs={documents}
       />
     </>
   );

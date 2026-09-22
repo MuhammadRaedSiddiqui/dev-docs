@@ -8,13 +8,16 @@ import { ApiKeySection } from "@/components/settings/ApiKeySection";
 import { PlanSection } from "@/components/settings/PlanSection";
 import { PrivacySection } from "@/components/settings/PrivacySection";
 import type { AIProvider } from "@/lib/ai/provider";
+import { trpc } from "@/lib/trpc";
 
 export default function SettingsPage() {
   const [section, setSection] = useState<SettingsSection>("account");
-  const [anyKeyConnected, setAnyKeyConnected] = useState(true);
+  const keysQuery = trpc.keys.list.useQuery();
+  const utils = trpc.useUtils();
 
   function handleConnectedChange(_provider: AIProvider, connected: boolean) {
-    if (connected) setAnyKeyConnected(true);
+    void connected;
+    void utils.keys.list.invalidate();
   }
 
   return (
@@ -24,14 +27,14 @@ export default function SettingsPage() {
         <SettingsSidebar
           active={section}
           onChange={setSection}
-          apiKeyConnected={anyKeyConnected}
+          apiKeyConnected={(keysQuery.data?.length ?? 0) > 0}
         />
         <main className="flex-1 overflow-y-auto px-9 py-7">
           {section === "account" && <AccountSection />}
           {section === "apikey" && (
             <ApiKeySection onConnectedChange={handleConnectedChange} />
           )}
-          {section === "plan"    && <PlanSection projectsUsed={1} projectsLimit={3} />}
+          {section === "plan"    && <PlanSection />}
           {section === "privacy" && <PrivacySection />}
         </main>
       </div>

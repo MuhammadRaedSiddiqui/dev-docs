@@ -1,9 +1,11 @@
 "use client";
-import { useState, useRef, useCallback, useEffect } from "react";
+import { useState, useRef, useCallback } from "react";
 import { useInterviewStore, selectFullDocument } from "@/lib/interview/store";
 import { buildProjectZip } from "@/lib/export/buildZip";
 import { MarkdownRenderer } from "@/components/ui/MarkdownRenderer";
 import type { DomainId } from "@/lib/types";
+import { trpc } from "@/lib/trpc";
+import { useToast } from "@/lib/toast";
 
 function parseDocumentSections(doc: string): { header: string; sections: string[] } {
   const parts = doc.split("\n\n---\n\n");
@@ -12,6 +14,10 @@ function parseDocumentSections(doc: string): { header: string; sections: string[
 
 export function PreviewPanel() {
   const store = useInterviewStore();
+  const { toast } = useToast();
+  const { mutate: persistDocument } = trpc.documents.update.useMutation({
+    onError: () => toast("Document edit could not be saved. Please try again.", "error"),
+  });
   const [mode, setMode] = useState<"preview" | "edit">("preview");
   const [editText, setEditText] = useState("");
   const [regenerating, setRegenerating] = useState<DomainId | null>(null);
@@ -20,9 +26,14 @@ export function PreviewPanel() {
 
   const fullDoc = selectFullDocument(store);
 
-  useEffect(() => {
-    if (mode === "edit") setEditText(fullDoc);
-  }, [mode]);
+  function toggleMode() {
+    if (mode === "preview") {
+      setEditText(fullDoc);
+      setMode("edit");
+      return;
+    }
+    setMode("preview");
+  }
 
   const handleEditChange = useCallback((value: string) => {
     setEditText(value);
@@ -32,12 +43,17 @@ export function PreviewPanel() {
       const activeDomains = store.activeDomains;
       sections.forEach((section, i) => {
         if (i < activeDomains.length) {
+          const domainId = activeDomains[i].id;
+          if (!store.completedDomains.includes(domainId)) return;
           const trimmed = section.replace(/\n\n---\n\n$/, "").trimEnd();
-          store.setDomainContent(activeDomains[i].id, trimmed);
+          store.setDomainContent(domainId, trimmed);
+          if (store.projectId) {
+            persistDocument({ projectId: store.projectId, domainId, content: trimmed });
+          }
         }
       });
     }, 800);
-  }, [store]);
+  }, [store, persistDocument]);
 
   function handleRegenerate(domainId: DomainId) {
     setRegenerating(domainId);
@@ -74,7 +90,7 @@ export function PreviewPanel() {
         <span className={`text-[10px] px-2 py-0.5 rounded-full border ${store.isComplete ? "bg-ink text-white border-ink" : "bg-white text-ink-faint border-hairline"}`}>{store.completedDomains.length}/{store.activeDomains.length}</span>
         <button
           type="button"
-          onClick={() => setMode(mode === "preview" ? "edit" : "preview")}
+          onClick={toggleMode}
           className={`px-2.5 py-1 rounded-lg text-[11px] font-medium border ${mode === "edit" ? "bg-ink text-white border-ink" : "bg-white text-ink-secondary border-hairline hover:bg-hover-veil"}`}
         >
           {mode === "edit" ? "Preview" : "Edit"}

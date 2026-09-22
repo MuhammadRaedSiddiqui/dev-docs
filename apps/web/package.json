@@ -8,7 +8,11 @@
     "start": "next start",
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
-    "clean": "rm -rf .next"
+    "test:e2e": "playwright test --config playwright.ci.config.ts",
+    "test:e2e:hitl": "playwright test",
+    "clean": "rm -rf .next",
+    "report:agent": "ts-node --transpile-only e2e/scripts/generate-agent-report.ts",
+    "test:ai": "ts-node --transpile-only e2e/scripts/ai-generate-test.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.27.3",
@@ -35,11 +39,15 @@
     "@types/node": "^20.14.0",
     "@types/react": "^18.3.3",
     "@types/react-dom": "^18.3.0",
+    "ajv": "^8.17.1",
+    "ajv-formats": "^3.0.1",
     "autoprefixer": "^10.4.20",
+    "dotenv": "^17.4.2",
     "eslint": "^8.57.0",
     "eslint-config-next": "14.2.5",
     "postcss": "^8.4.41",
     "tailwindcss": "^3.4.7",
+    "ts-node": "^10.9.2",
     "typescript": "^5.5.4"
   }
 }

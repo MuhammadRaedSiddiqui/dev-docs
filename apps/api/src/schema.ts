@@ -3,7 +3,7 @@
 // Run `pnpm drizzle-kit push` to sync these to the database without writing
 // manual SQL migrations during development.
 import {
-  pgTable, uuid, text, timestamp, jsonb, unique,
+  pgTable, uuid, text, timestamp, jsonb, unique, integer, boolean, index,
 } from "drizzle-orm/pg-core";
 
 export const users = pgTable("users", {
@@ -60,12 +60,15 @@ export const interviewSessions = pgTable("interview_sessions", {
   userId:               uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
   startedAt:            timestamp("started_at", { withTimezone: true }).defaultNow(),
   endedAt:              timestamp("ended_at", { withTimezone: true }),
-  totalMessages:        text("total_messages").default("0"),
-  totalDomainsCompleted: text("total_domains_completed").default("0"),
+  totalMessages:        integer("total_messages").notNull().default(0),
+  totalDomainsCompleted: integer("total_domains_completed").notNull().default(0),
   primaryProvider:      text("primary_provider"),  // Most used provider in session
-  isComplete:           text("is_complete").default("false"),
+  isComplete:           boolean("is_complete").notNull().default(false),
   metadata:             jsonb("metadata"),         // Session-level data: project type, active domains, etc.
-});
+}, table => ({
+  userIdIdx: index("interview_sessions_user_id_idx").on(table.userId),
+  projectIdIdx: index("interview_sessions_project_id_idx").on(table.projectId),
+}));
 
 export const interviewMessages = pgTable("interview_messages", {
   id:                  uuid("id").primaryKey().defaultRandom(),
@@ -75,10 +78,13 @@ export const interviewMessages = pgTable("interview_messages", {
   domainId:            text("domain_id").notNull(),
   provider:            text("provider"),           // AI provider used for this response (null for user messages)
   timestamp:           timestamp("timestamp", { withTimezone: true }).defaultNow(),
-  thinkingDurationMs:  text("thinking_duration_ms"),   // Time in "thinking" state
-  streamingDurationMs: text("streaming_duration_ms"),  // Time spent streaming
-  totalDurationMs:     text("total_duration_ms"),      // Total time from request to completion
-  tokensUsed:          text("tokens_used"),            // Tokens from provider (if available)
+  thinkingDurationMs:  integer("thinking_duration_ms"),   // Time in "thinking" state
+  streamingDurationMs: integer("streaming_duration_ms"),  // Time spent streaming
+  totalDurationMs:     integer("total_duration_ms"),      // Total time from request to completion
+  tokensUsed:          integer("tokens_used"),            // Tokens from provider (if available)
   errorType:           text("error_type"),             // Error type if failed
   metadata:            jsonb("metadata"),              // Card choices, schema actions, etc.
-});
+}, table => ({
+  sessionTimestampIdx: index("interview_messages_session_timestamp_idx")
+    .on(table.sessionId, table.timestamp),
+}));

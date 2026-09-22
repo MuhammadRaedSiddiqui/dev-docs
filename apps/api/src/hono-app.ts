@@ -4,18 +4,19 @@
 
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
-import { logger as honoLogger } from 'hono/logger';
 import { prettyJSON } from 'hono/pretty-json';
 import { secureHeaders } from 'hono/secure-headers';
 import { fetchRequestHandler } from '@trpc/server/adapters/fetch';
+import { sql } from 'drizzle-orm';
 
 // Import routers
-import projectsRouter from './routes/hono/projects';
-import keysRouter from './routes/hono/keys';
 import aiRouter from './routes/hono/ai';
-import sessionsRouter from './routes/hono/sessions';
 import { appRouter } from './trpc/router';
 import { createContext } from './trpc/context';
+import { db } from './lib/db';
+import { logger } from './lib/logger';
+import { captureError } from './lib/sentry';
+import { beginRequest, recordServerError, renderMetrics } from './lib/metrics';
 
 const app = new Hono();
 
@@ -32,8 +33,26 @@ app.use('*', cors({
   allowHeaders: ['Content-Type', 'Authorization'],
 }));
 
-// Request logging
-app.use('*', honoLogger());
+// Correlate every response and emit structured latency/status logs.
+app.use('*', async (c, next) => {
+  const suppliedId = c.req.header('x-request-id');
+  const requestId = suppliedId && suppliedId.length <= 128 ? suppliedId : crypto.randomUUID();
+  const started = performance.now();
+  const finishMetric = beginRequest();
+  c.header('x-request-id', requestId);
+  try {
+    await next();
+  } finally {
+    finishMetric();
+    logger.info({
+      requestId,
+      method: c.req.method,
+      path: new URL(c.req.url).pathname,
+      status: c.res.status,
+      durationMs: Math.round((performance.now() - started) * 100) / 100,
+    }, 'HTTP request completed');
+  }
+});
 
 // Pretty JSON in development
 if (process.env.NODE_ENV !== 'production') {
@@ -51,36 +70,50 @@ app.all('/trpc/*', async (c) => {
   });
 });
 
-// ── REST Routes (Legacy - being migrated to tRPC) ─────────────────────────────
+// Operational endpoints
 
 // Health check
 app.get('/health', (c) => {
   return c.json({
     status: 'ok',
-    service: '@devdocs/api (Hono + tRPC)',
-    ts: new Date().toISOString(),
-    framework: 'Hono',
-    api: 'tRPC',
-    performance: '50k+ req/s',
+    service: '@devdocs/api',
+    timestamp: new Date().toISOString(),
+    uptimeSeconds: Math.floor(process.uptime()),
+    version: process.env.APP_VERSION ?? process.env.npm_package_version ?? 'unknown',
   });
 });
 
-// Mount legacy Hono routes (will eventually be replaced by tRPC)
-app.route('/projects', projectsRouter);
-app.route('/keys', keysRouter);
+// Liveness only proves the API process can answer HTTP requests.
+app.get('/health/live', (c) => c.json({ status: 'ok' }));
+
+// Readiness verifies the required database dependency before a load balancer
+// sends traffic to this instance.
+app.get('/health/ready', async (c) => {
+  try {
+    await db.execute(sql`select 1`);
+    return c.json({ status: 'ready', database: 'ok' });
+  } catch (err) {
+    logger.error({ err }, 'Readiness database check failed');
+    return c.json({ status: 'not_ready', database: 'unavailable' }, 503);
+  }
+});
+
+// Prometheus text format for scraping by a metrics collector.
+app.get('/metrics', (c) => c.text(renderMetrics(), 200, {
+  'content-type': 'text/plain; version=0.0.4; charset=utf-8',
+}));
+
+// SSE remains HTTP because it is not supported by the current tRPC batch link.
 app.route('/ai', aiRouter);
-app.route('/sessions', sessionsRouter);
 
 // Welcome endpoint
 app.get('/', (c) => {
   return c.json({
-    message: 'DevDocs API - Hono + tRPC Edition',
-    performance: '5x faster than Express',
-    typeSafety: 'Full end-to-end with tRPC',
+    message: 'DevDocs API',
     routes: {
       health: '/health',
       trpc: '/trpc',
-      projects: '/projects (REST - being deprecated)',
+      aiStream: '/ai/stream (SSE)',
     },
   });
 });
@@ -88,7 +121,10 @@ app.get('/', (c) => {
 // ── Error handling ────────────────────────────────────────────────────────────
 
 app.onError((err, c) => {
-  console.error('Hono error:', err);
+  const requestId = c.res.headers.get('x-request-id');
+  recordServerError();
+  logger.error({ err, requestId, method: c.req.method, path: new URL(c.req.url).pathname }, 'Unhandled HTTP error');
+  captureError(err, { requestId, method: c.req.method, path: new URL(c.req.url).pathname });
   return c.json({
     error: 'server_error',
     message: 'An unexpected error occurred.',

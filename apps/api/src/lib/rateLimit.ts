@@ -30,20 +30,25 @@ export async function checkRateLimit(
   // missing cache dependency.
   if (!redis) return { allowed: true, remaining: limit, resetIn: windowSec };
 
-  const redisKey = `ratelimit:${key}`;
-  const count = await redis.incr(redisKey);
+  try {
+    const redisKey = `ratelimit:${key}`;
+    const count = await redis.incr(redisKey);
 
   // First hit in this window — set the expiry.
-  if (count === 1) {
-    await redis.expire(redisKey, windowSec);
+    if (count === 1) {
+      await redis.expire(redisKey, windowSec);
+    }
+
+    const ttl = await redis.ttl(redisKey);
+    const resetIn = ttl > 0 ? ttl : windowSec;
+
+    if (count > limit) {
+      return { allowed: false, remaining: 0, resetIn };
+    }
+
+    return { allowed: true, remaining: Math.max(0, limit - count), resetIn };
+  } catch {
+    // A transient cache outage must not make AI generation unavailable.
+    return { allowed: true, remaining: limit, resetIn: windowSec };
   }
-
-  const ttl = await redis.ttl(redisKey);
-  const resetIn = ttl > 0 ? ttl : windowSec;
-
-  if (count > limit) {
-    return { allowed: false, remaining: 0, resetIn };
-  }
-
-  return { allowed: true, remaining: Math.max(0, limit - count), resetIn };
 }

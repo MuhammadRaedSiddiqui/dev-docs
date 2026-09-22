@@ -95,10 +95,10 @@ export function CreateProjectModal({ open, onClose, onCreate, creating }: Props)
   }
 
   async function handleVerifyAndCreate() {
+    if (provider === "bedrock") return;
     const key = keyInput.trim();
     if (!key) return;
 
-    const prefix = provider === "anthropic" ? "sk-ant-" : provider === "metamuse" ? "LLM_" : "sk-";
     if (key.length < 20) {
       setVerifyError("That doesn’t look like a valid API key. Keys are usually 40+ characters.");
       return;

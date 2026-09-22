@@ -1,11 +1,11 @@
 import { Hono } from 'hono';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, isNull } from 'drizzle-orm';
 import { StreamRequestSchema, buildSystemPrompt, PROVIDER_MODELS, type AIProvider } from '@devdocs/shared';
 import { db, documentationBundles, projects } from '../../lib/db';
 import { streamAIResponse } from '../../lib/aiStream';
 import { checkRateLimit } from '../../lib/rateLimit';
 import { requireClerkAuth } from '../../middleware/hono-clerk-auth';
-import { loadDecryptedKey } from './keys';
+import { loadDecryptedKey } from '../../lib/apiKeys';
 
 const models: Record<AIProvider, string> = {
   anthropic: 'claude-sonnet-4-6',
@@ -37,7 +37,7 @@ app.post('/stream', async (c) => {
   const { projectId, domainId, userMessage, provider, history } = parsed.data;
   const userId = c.get('userId');
   const project = await db.query.projects.findFirst({
-    where: and(eq(projects.id, projectId), eq(projects.userId, userId)),
+    where: and(eq(projects.id, projectId), eq(projects.userId, userId), isNull(projects.deletedAt)),
   });
   if (!project) return c.json({ error: 'not_found', message: 'Project not found.' }, 404);
 
@@ -106,12 +106,23 @@ app.post('/stream', async (c) => {
       }, {
         onToken: (text) => send({ type: 'token', text }),
         onDone: async (text) => {
-          clearTimeout(timeout);
-          await db.insert(documentationBundles).values({ projectId, domainId, content: text }).onConflictDoUpdate({
-            target: [documentationBundles.projectId, documentationBundles.domainId],
-            set: { content: text, updatedAt: new Date() },
-          });
-          send({ type: 'done', text }); close();
+          try {
+            await db.insert(documentationBundles).values({ projectId, domainId, content: text }).onConflictDoUpdate({
+              target: [documentationBundles.projectId, documentationBundles.domainId],
+              set: { content: text, updatedAt: new Date() },
+            });
+            clearTimeout(timeout);
+            send({ type: 'done', text });
+            close();
+          } catch {
+            clearTimeout(timeout);
+            send({
+              type: 'error',
+              errorType: 'persistence',
+              message: 'The response was generated but could not be saved. Please retry.',
+            });
+            close();
+          }
         },
         onError: (errorType, message) => { clearTimeout(timeout); send({ type: 'error', errorType, message }); close(); },
       }, abort.signal, history);

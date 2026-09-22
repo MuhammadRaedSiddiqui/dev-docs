@@ -1,11 +1,28 @@
 "use client";
 import { cn } from "@/lib/utils";
 import type { Project } from "@/lib/types";
-interface Props { projects: Project[]; statusFilter: "all"|"in_progress"|"complete"; typeFilter: string|null; onStatusFilter: (s: "all"|"in_progress"|"complete")=>void; onTypeFilter: (t: string)=>void; onNewProject: ()=>void; projectsUsed: number; projectsLimit: number; }
-const TYPE_FILTERS = [{ id:"saas",label:"SaaS products"},{ id:"api",label:"API services"},{ id:"internal_tool",label:"Internal tools"}];
-export function DashboardSidebar({ projects, statusFilter, typeFilter, onStatusFilter, onTypeFilter, onNewProject, projectsUsed, projectsLimit }: Props) {
-  const counts = { all: projects.length, in_progress: projects.filter(p=>p.status==="in_progress").length, complete: projects.filter(p=>p.status==="complete").length };
-  const pct = Math.round(projectsUsed/projectsLimit*100);
+
+interface Props {
+  projects: Project[];
+  statusFilter: "all" | "in_progress" | "complete";
+  typeFilter: string | null;
+  onStatusFilter: (status: "all" | "in_progress" | "complete") => void;
+  onTypeFilter: (type: string) => void;
+  onNewProject: () => void;
+}
+
+const TYPE_FILTERS = [
+  { id: "saas", label: "SaaS products" },
+  { id: "api", label: "API services" },
+  { id: "internal_tool", label: "Internal tools" },
+];
+
+export function DashboardSidebar({ projects, statusFilter, typeFilter, onStatusFilter, onTypeFilter, onNewProject }: Props) {
+  const counts = {
+    all: projects.length,
+    in_progress: projects.filter(project => project.status === "in_progress").length,
+    complete: projects.filter(project => project.status === "complete").length,
+  };
   return (
     <aside className="w-[260px] flex-shrink-0 border-r border-hairline bg-sidebar-mist flex flex-col py-4 overflow-y-auto">
       <div className="px-4 mb-5">
@@ -15,26 +32,29 @@ export function DashboardSidebar({ projects, statusFilter, typeFilter, onStatusF
       </div>
       <div className="px-2 mb-5">
         <div className="px-2 mb-2 text-[10px] font-medium uppercase tracking-wider text-ink-faint">Views</div>
-        {[{s:"all"as const,l:"All projects"},{s:"in_progress"as const,l:"In progress",dot:"var(--color-graphite-ink)"},{s:"complete"as const,l:"Complete",dot:"var(--color-graphite-ink)"}].map(({s,l,dot})=>(
-          <button key={s} type="button" onClick={()=>onStatusFilter(s)} className={cn("w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-[14px] transition-colors text-left mb-0.5",statusFilter===s&&!typeFilter?"bg-hover-veil text-ink font-medium":"text-ink-muted hover:bg-hover-veil hover:text-ink")}>
-            {dot&&<span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{background:dot}}/>}{l}
-            <span className="ml-auto text-[11px] text-ink-faint">{counts[s]}</span>
+        {([
+          { status: "all" as const, label: "All projects" },
+          { status: "in_progress" as const, label: "In progress", dot: true },
+          { status: "complete" as const, label: "Complete", dot: true },
+        ]).map(({ status, label, dot }) => (
+          <button key={status} type="button" onClick={() => onStatusFilter(status)} className={cn("w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-[14px] transition-colors text-left mb-0.5", statusFilter === status && !typeFilter ? "bg-hover-veil text-ink font-medium" : "text-ink-muted hover:bg-hover-veil hover:text-ink")}>
+            {dot && <span className="w-1.5 h-1.5 rounded-full flex-shrink-0 bg-ink" />}{label}
+            <span className="ml-auto text-[11px] text-ink-faint">{counts[status]}</span>
           </button>
         ))}
       </div>
-      <div className="h-px bg-hairline mx-4 mb-4"/>
+      <div className="h-px bg-hairline mx-4 mb-4" />
       <div className="px-2 mb-5">
         <div className="px-2 mb-2 text-[10px] font-medium uppercase tracking-wider text-ink-faint">By type</div>
-        {TYPE_FILTERS.map(t=>(
-          <button key={t.id} type="button" onClick={()=>onTypeFilter(t.id)} className={cn("w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-[14px] transition-colors text-left mb-0.5",typeFilter===t.id?"bg-hover-veil text-ink font-medium":"text-ink-muted hover:bg-hover-veil hover:text-ink")}>
-            {t.label}
+        {TYPE_FILTERS.map(type => (
+          <button key={type.id} type="button" onClick={() => onTypeFilter(type.id)} className={cn("w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-[14px] transition-colors text-left mb-0.5", typeFilter === type.id ? "bg-hover-veil text-ink font-medium" : "text-ink-muted hover:bg-hover-veil hover:text-ink")}>
+            {type.label}
           </button>
         ))}
       </div>
       <div className="mt-auto mx-4 p-4 bg-white border border-hairline rounded-lg">
-        <div className="text-[11px] text-ink-muted mb-1.5">Free plan · {projectsUsed} of {projectsLimit} projects</div>
-        <div className="h-1 bg-edge-gray rounded-full mb-1.5"><div className="h-full bg-ink rounded-full" style={{width:`${pct}%`}}/></div>
-        <div className="text-[11px] text-ink-faint">Need more? <a href="/settings" className="text-ink font-medium underline">Upgrade →</a></div>
+        <div className="text-[11px] font-medium text-ink mb-1">BYOK workspace</div>
+        <div className="text-[11px] text-ink-faint">Your provider bills AI usage directly. DevDocs does not impose a project quota.</div>
       </div>
     </aside>
   );

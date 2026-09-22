@@ -3,20 +3,19 @@ node_modules/
 .pnp
 .pnp.js
 
-# Next.js build output
+# Build outputs
 .next/
 out/
-
-# Production build
-build/
 dist/
+build/
 
-# Environment variables — NEVER commit these
+# Turbo
+.turbo/
+
+# Environment
 .env
 .env.local
-.env.development.local
-.env.test.local
-.env.production.local
+.env.*.local
 
 # Vercel
 .vercel
@@ -25,7 +24,7 @@ dist/
 *.tsbuildinfo
 next-env.d.ts
 
-# OS files
+# OS
 .DS_Store
 Thumbs.db
 
@@ -33,11 +32,22 @@ Thumbs.db
 .idea/
 .vscode/
 *.swp
-*.swo
 
 # Logs
 *.log
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-pnpm-debug.log*
+
+# Playwright
+playwright-report/
+test-results/
+blob-report/
+playwright/.cache/
+
+# E2E framework — local-only runtime state (never commit)
+e2e/storage-state/
+e2e/.env
+
+# DevDocs AI — local artifacts
+.freebuff/
+session_*.md
+.agents/
+.pnpm-store/

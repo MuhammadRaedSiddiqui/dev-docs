@@ -1,0 +1,25 @@
+# apps/web/e2e/docker-compose.yml
+# Usage (from repo root):
+#   docker compose -f apps/web/e2e/docker-compose.yml run --rm e2e
+#   docker compose -f apps/web/e2e/docker-compose.yml run --rm e2e npx playwright test e2e/tests/example.smoke.spec.ts
+services:
+  e2e:
+    build:
+      context: ../../..
+      dockerfile: apps/web/e2e/Dockerfile
+    volumes:
+      - ../../../:/repo
+      - /repo/node_modules
+      - /repo/apps/web/node_modules
+    env_file:
+      - .env
+    environment:
+      CI: "true"
+      BASE_URL: ${BASE_URL:-http://localhost:3000}
+      HITL_WEBHOOK_URL: ${HITL_WEBHOOK_URL:-}
+      HITL_RESUME_SECRET: ${HITL_RESUME_SECRET:-}
+      ENABLE_AI_TRIAGE: ${ENABLE_AI_TRIAGE:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+    ports:
+      - "9234:9234" # HITL resume endpoint (operator access only — VPN/tunnel, never public)
+    command: npx playwright test

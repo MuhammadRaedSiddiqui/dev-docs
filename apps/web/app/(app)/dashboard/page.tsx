@@ -9,10 +9,10 @@ import { CreateProjectModal } from "@/components/dashboard/CreateProjectModal";
 import { buildProjectZip } from "@/lib/export/buildZip";
 import type { Project, ProjectContext, ProjectType, DomainId } from "@/lib/types";
 import { trpc } from "@/lib/trpc";
-
-const LIMIT = 3;
+import { useUser } from "@clerk/nextjs";
 
 export default function DashboardPage() {
+  const { user } = useUser();
   const router = useRouter();
   const [statusFilter, setStatusFilter] = useState<"all"|"in_progress"|"complete">("all");
   const [typeFilter, setTypeFilter] = useState<string|null>(null);
@@ -45,8 +45,14 @@ export default function DashboardPage() {
     try {
       const full = await utils.projects.get.fetch({ id: p.id });
       const data = full.interviewData as { lockedContext?: ProjectContext; domainContent?: Partial<Record<DomainId, string>> } | null;
-      if (data?.lockedContext && data?.domainContent) {
-        const blob = await buildProjectZip(data.lockedContext, data.domainContent);
+      const canonicalContent = Object.fromEntries(
+        (full.documents ?? []).map(document => [document.domainId, document.content]),
+      ) as Partial<Record<DomainId, string>>;
+      const domainContent = Object.keys(canonicalContent).length > 0
+        ? canonicalContent
+        : data?.domainContent;
+      if (data?.lockedContext && domainContent) {
+        const blob = await buildProjectZip(data.lockedContext, domainContent);
         const slug = p.name.replace(/\s+/g, "-").toLowerCase();
         const url = URL.createObjectURL(blob);
         const a = document.createElement("a"); a.href = url; a.download = `${slug}-docs.zip`;
@@ -74,9 +80,9 @@ export default function DashboardPage() {
     <div className="flex flex-col h-screen overflow-hidden">
       <Navbar active="projects" />
       <div className="flex flex-1 overflow-hidden">
-        <DashboardSidebar projects={projects} statusFilter={statusFilter} typeFilter={typeFilter} onStatusFilter={s=>{setStatusFilter(s);setTypeFilter(null);}} onTypeFilter={handleTypeFilter} onNewProject={()=>setModalOpen(true)} projectsUsed={projects.length} projectsLimit={LIMIT} />
+        <DashboardSidebar projects={projects} statusFilter={statusFilter} typeFilter={typeFilter} onStatusFilter={s=>{setStatusFilter(s);setTypeFilter(null);}} onTypeFilter={handleTypeFilter} onNewProject={()=>setModalOpen(true)} />
         <main className="flex-1 overflow-y-auto px-8 py-7">
-          <StatStrip projects={projects} projectsLimit={LIMIT} />
+          <StatStrip projects={projects} userName={user?.firstName ?? user?.username ?? undefined} />
           {projectsQuery.error && <div className="mb-4 text-sm text-danger">Unable to load projects. Please refresh and try again.</div>}
           <div className="flex items-center justify-between mb-3.5">
             <div className="text-[11px] font-medium uppercase tracking-wider text-ink-faint">{label} — {list.length}</div>

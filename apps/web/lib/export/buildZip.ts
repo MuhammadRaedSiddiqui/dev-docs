@@ -1,5 +1,5 @@
 import JSZip from "jszip";
-import { DOMAINS } from "@/lib/interview/domains";
+import { DOMAINS, getActiveDomains } from "@/lib/interview/domains";
 import type { DomainId, ProjectContext } from "@/lib/types";
 
 const DOMAIN_DESCRIPTIONS: Record<DomainId, string> = {
@@ -37,14 +37,14 @@ ${fileList}
 }
 
 export async function buildProjectZip(
-  _ctx: ProjectContext,
+  ctx: ProjectContext,
   domainContent: Partial<Record<DomainId, string>>,
 ): Promise<Blob> {
   const zip = new JSZip();
   const docsFolder = zip.folder("docs")!;
   const includedFiles: string[] = [];
 
-  for (const domain of DOMAINS) {
+  for (const domain of getActiveDomains(ctx.projectType)) {
     const content = domainContent[domain.id];
     if (!content) continue;
     docsFolder.file(domain.file, content);

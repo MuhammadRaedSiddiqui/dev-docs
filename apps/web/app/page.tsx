@@ -34,7 +34,7 @@ const FAQS = [
   },
   {
     q: "Can I edit the generated documentation?",
-    a: "Yes. Every file is fully editable in-app before you export. You can also regenerate any individual file without rerunning the full interview if you change your mind about a decision.",
+    a: "Yes. Every generated file is editable in-app before you export the bundle.",
   },
   {
     q: "Does this work with Claude Code, Cursor, and Windsurf?",
@@ -42,7 +42,7 @@ const FAQS = [
   },
   {
     q: "What if I already started my project?",
-    a: "DevDocs AI is designed for pre-build planning, but running the interview on an existing project is still useful for documenting decisions already made and identifying gaps. Several users have used it mid-project to recover from undocumented architecture.",
+    a: "DevDocs AI is designed for pre-build planning, but you can also use the interview to document decisions in an existing project and identify gaps.",
   },
 ];
 
@@ -84,7 +84,7 @@ export default function LandingPage() {
                 Your project,<br />fully planned before<br />you write line one.
               </h1>
               <p className={s.heroSub}>
-                Interview with AI. Get a complete 10-file documentation bundle. Feed it to Claude Code,
+                Interview with AI. Generate a project-specific documentation bundle. Feed it to Claude Code,
                 Cursor, or Windsurf. Build without guessing.
               </p>
               <div className={s.heroCtas}>
@@ -157,7 +157,7 @@ export default function LandingPage() {
                   "Schema designed and indexed before a table is created",
                   "Auth documented with provider, session, and RBAC decisions",
                   "Stripe webhook strategy defined in ENV-STRATEGY.md",
-                  "Coding agent begins with full context. No guessing.",
+                  "Coding agent begins with documented project decisions.",
                 ].map((item) => (
                   <li key={item} className={s.consequenceItem}>
                     <span className={s.consequenceIcon}>✓</span> {item}
@@ -174,7 +174,7 @@ export default function LandingPage() {
         <div className={s.container}>
           <div className={s.sectionHowIntro}>
             <p className={s.sectionLabel}>How it works</p>
-            <h2 className={s.heading}>Four steps between your idea<br />and a production-ready plan.</h2>
+            <h2 className={s.heading}>Four steps between your idea<br />and an implementation-ready plan.</h2>
           </div>
           <div className={s.stepsGrid}>
             {[
@@ -190,13 +190,13 @@ export default function LandingPage() {
               },
               {
                 n: "03 — Generate",
-                title: "Ten files. Every decision documented.",
-                body: "All 10 documentation files generated simultaneously. Each follows a strict markdown format optimised for AI coding agent consumption. Edit any file in-app before exporting.",
+                title: "Relevant domains, documented.",
+                body: "DevDocs generates the documentation domains relevant to your project type. Each follows a consistent markdown format and remains editable before export.",
               },
               {
                 n: "04 — Export & Build",
                 title: "Drop in. Point. Build.",
-                body: "Download the complete documentation bundle as a ZIP. Drop the docs/ folder into your project root. Point your coding agent at README.md and start building with full context loaded.",
+                body: "Download the generated documentation bundle as a ZIP. Drop the docs/ folder into your project root and give your coding agent the decisions captured during the interview.",
               },
             ].map((step) => (
               <div key={step.n} className={s.stepCell}>
@@ -216,7 +216,7 @@ export default function LandingPage() {
         <div className={s.container}>
           <div className={s.outputIntro}>
             <p className={s.sectionLabel}>The output</p>
-            <h2 className={s.heading}>Ten files. Nothing left<br />for the agent to guess.</h2>
+            <h2 className={s.heading}>Ten supported domains.<br />Your project gets the relevant set.</h2>
           </div>
           <div className={s.outputTable}>
             {OUTPUT_FILES.map((f) => (
@@ -229,7 +229,7 @@ export default function LandingPage() {
             ))}
           </div>
           <p className={s.outputNote}>
-            Every file is editable in-app before export. Regenerate any section without rerunning the full interview.
+            Every generated file is editable in-app before ZIP export.
           </p>
         </div>
       </section>
@@ -246,17 +246,17 @@ export default function LandingPage() {
               {
                 price: "$0 / free",
                 title: "Free with BYOK",
-                body: "You supply your Anthropic API key. All AI calls go directly from your browser to the Anthropic API. Your key never touches our servers. Typical session costs $0.50–$1.00 in API usage.",
+                body: "You supply a supported provider key. It is sent over HTTPS, verified, encrypted at rest, and used only by our server for your AI requests. Provider usage charges vary by model and interview length.",
               },
               {
-                price: "$12 / month",
-                title: "Pro — hosted key",
-                body: "We manage the API key. No Anthropic account required. Unlimited projects, PDF export, project versioning, and email support. Upgrade when your BYOK spend exceeds $12/month.",
+                price: "Roadmap",
+                title: "Hosted AI",
+                body: "Hosted model access, versioning, and additional export formats are ideas under consideration. Pricing and availability have not been announced.",
               },
               {
-                price: "$35 / seat / month",
-                title: "Team — shared workspaces",
-                body: "Everything in Pro. Shared team workspaces, role-based permissions, admin dashboard, SSO, and audit logs. For small teams building together.",
+                price: "Roadmap",
+                title: "Team workspaces",
+                body: "Shared projects and administrative controls are ideas under consideration. They are not currently available for purchase.",
               },
             ].map((col) => (
               <div key={col.title} className={s.byokCol}>
@@ -267,7 +267,7 @@ export default function LandingPage() {
             ))}
           </div>
           <p className={s.byokNote}>
-            The free tier is complete. All 10 documentation domains. All templates. ZIP export. No feature gates.
+            Available today: supported documentation domains, project templates, in-app editing, and ZIP export using your own provider key.
           </p>
         </div>
       </section>
@@ -279,41 +279,41 @@ export default function LandingPage() {
         <div className={s.container}>
           <div className={s.pricingIntro}>
             <p className={s.sectionLabel}>Pricing</p>
-            <h2 className={s.heading}>Simple pricing.</h2>
+            <h2 className={s.heading}>Free BYOK access today.</h2>
           </div>
           <div className={s.pricingGrid}>
             <div className={s.pricingCard}>
               <p className={s.pricingTier}>Free</p>
               <p className={s.pricingPrice}>$0</p>
-              <p className={s.pricingPriceNote}>forever</p>
-              <p className={s.pricingDesc}>For developers validating the approach. Full product, your own API key.</p>
+              <p className={s.pricingPriceNote}>current access</p>
+              <p className={s.pricingDesc}>Use your own supported AI-provider key. Your provider charges you directly for model usage.</p>
               <ul className={s.pricingFeatures}>
-                {["3 projects", "All 10 documentation domains", "All project templates", "ZIP export", "Share links", "BYOK only"].map((f) => <li key={f}>{f}</li>)}
+                {["No configured project quota", "Supported documentation domains", "Project templates", "In-app editing", "ZIP export", "BYOK"].map((f) => <li key={f}>{f}</li>)}
               </ul>
               <Link href="/sign-in" className={s.btnGhostLg}>Get Started Free</Link>
             </div>
 
-            <div className={`${s.pricingCard} ${s.pricingCardFeatured}`}>
-              <span className={s.featuredBadge}>Most popular</span>
-              <p className={s.pricingTier}>Pro</p>
-              <p className={s.pricingPrice}>$12</p>
-              <p className={s.pricingPriceNote}>per month</p>
-              <p className={s.pricingDesc}>For developers who build regularly and want zero API key friction.</p>
+            <div className={s.pricingCard}>
+              <span className={s.featuredBadge}>Roadmap</span>
+              <p className={s.pricingTier}>Hosted AI</p>
+              <p className={s.pricingPrice}>TBD</p>
+              <p className={s.pricingPriceNote}>not yet available</p>
+              <p className={s.pricingDesc}>Potential hosted model access without supplying a provider key.</p>
               <ul className={s.pricingFeatures}>
-                {["Unlimited projects", "Hosted API key — no BYOK", "Project versioning", "PDF export", "Priority processing", "Email support"].map((f) => <li key={f}>{f}</li>)}
+                {["Hosted model access", "Project versioning", "Additional export formats"].map((f) => <li key={f}>{f}</li>)}
               </ul>
-              <Link href="/sign-in" className={s.btnPrimaryLg}>Start Pro</Link>
+              <span className={s.btnGhostLg}>Not available</span>
             </div>
 
             <div className={s.pricingCard}>
-              <p className={s.pricingTier}>Team</p>
-              <p className={s.pricingPrice}>$35</p>
-              <p className={s.pricingPriceNote}>per seat / month</p>
-              <p className={s.pricingDesc}>For small teams building and documenting together.</p>
+              <p className={s.pricingTier}>Team roadmap</p>
+              <p className={s.pricingPrice}>TBD</p>
+              <p className={s.pricingPriceNote}>not yet available</p>
+              <p className={s.pricingDesc}>Potential collaboration and administrative capabilities.</p>
               <ul className={s.pricingFeatures}>
-                {["Everything in Pro", "Team workspaces", "Shared projects", "Admin dashboard", "SSO + audit logs", "Dedicated support"].map((f) => <li key={f}>{f}</li>)}
+                {["Shared projects", "Workspace roles", "Administrative controls"].map((f) => <li key={f}>{f}</li>)}
               </ul>
-              <a href="#" className={s.btnGhostLg}>Contact Us</a>
+              <span className={s.btnGhostLg}>Not available</span>
             </div>
           </div>
         </div>

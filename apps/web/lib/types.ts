@@ -63,3 +63,12 @@ export const PROJECT_TYPE_LABELS: Record<ProjectType, string> = {
   saas: "SaaS product", api: "API service", internal_tool: "Internal tool",
   mobile: "Mobile app", landing_page: "Landing page", other: "Other",
 };
+
+export const PROJECT_TYPE_BADGE_CLASS: Record<ProjectType, string> = {
+  saas: "badge-blue",
+  api: "badge-green",
+  internal_tool: "badge-amber",
+  mobile: "badge-purple",
+  landing_page: "badge-orange",
+  other: "badge-blue",
+};

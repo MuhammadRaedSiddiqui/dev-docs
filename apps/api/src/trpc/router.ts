@@ -3,6 +3,10 @@
 
 import { router } from './trpc';
 import { projectsRouter } from './routers/projects';
+import { documentsRouter } from './routers/documents';
+import { accountRouter } from './routers/account';
+import { keysRouter } from './routers/keys';
+import { sessionsRouter } from './routers/sessions';
 
 /**
  * Main application router
@@ -10,9 +14,10 @@ import { projectsRouter } from './routers/projects';
  */
 export const appRouter = router({
   projects: projectsRouter,
-  // Add more routers here:
-  // keys: keysRouter,
-  // ai: aiRouter,
+  documents: documentsRouter,
+  account: accountRouter,
+  keys: keysRouter,
+  sessions: sessionsRouter,
 });
 
 /**

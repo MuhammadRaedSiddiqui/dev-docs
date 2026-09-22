@@ -17,6 +17,7 @@ const ERROR_MESSAGES: Record<StreamErrorType, string> = {
   rate_limit: "Rate limit reached. Wait a moment and try sending again.",
   timeout:    "The request timed out after 30 seconds. This can happen when the API is under load — try again.",
   network:    "Network error. Check your connection and try again.",
+  persistence:"The response was generated but could not be saved. Please retry.",
   unknown:    "An unexpected error occurred. Try again or check the provider's status page.",
 };
 
@@ -95,9 +96,6 @@ interface InterviewState {
 function initialPhases(): Record<DomainId, DomainPhase> {
   return Object.fromEntries(DOMAINS.map(d => [d.id, "not_started"])) as Record<DomainId, DomainPhase>;
 }
-
-// Integration point — replace with PATCH /api/projects/[id] (see prompt 3)
-function persistToSupabase(_: Partial<InterviewState>) {}
 
 // ── Internal types ────────────────────────────────────────────────────────────
 type S = InterviewState;
@@ -273,7 +271,6 @@ function completeDomain(set: SetFn, get: GetFn, domainId: DomainId, content: str
       : [...s.completedDomains, domainId],
     domainPhases:     { ...s.domainPhases, [domainId]: "complete" },
   }));
-  persistToSupabase({ domainContent: get().domainContent });
 
   // Analytics: time per domain
   if (duration > 0) {
@@ -305,20 +302,22 @@ function completeDomain(set: SetFn, get: GetFn, domainId: DomainId, content: str
       analytics.interviewCompleted(pid, get().completedDomains.length, totalMs, "");
     } catch {}
 
+    const finalState = get();
+    if (finalState.sessionLogger) {
+      void finalState.sessionLogger.endSession(true, {
+        totalMessages: finalState.messageCount,
+        totalDomainsCompleted: finalState.completedDomains.length,
+        primaryProvider: finalState.currentProvider ?? undefined,
+      });
+    }
+
+    // The final AI flourish is non-critical. Completion persistence and
+    // telemetry must not depend on a provider successfully generating it.
     runReply(
       set, get,
       "Generate the final completion message for the interview.",
       { isComplete: true, showDownload: true },
-      () => {
-        const finalState = get();
-        if (finalState.sessionLogger) {
-          void finalState.sessionLogger.endSession(true, {
-            totalMessages: finalState.messageCount,
-            totalDomainsCompleted: finalState.completedDomains.length,
-            primaryProvider: finalState.currentProvider ?? undefined,
-          });
-        }
-      },
+      undefined,
       true
     );
     return;
@@ -542,7 +541,6 @@ export const useInterviewStore = create<InterviewState>((set, get) => ({
 
   setDomainContent: (domainId, content) => {
     set(s => ({ domainContent: { ...s.domainContent, [domainId]: content } }));
-    persistToSupabase({ domainContent: get().domainContent });
   },
 
   regenerateDomain: (domainId) => {
@@ -576,7 +574,13 @@ export const useInterviewStore = create<InterviewState>((set, get) => ({
       return;
     }
     if (lastUserMessage) {
-      get().sendMessage(lastUserMessage);
+      if (source === "opener") {
+        // Internal generation/opening prompts must not be replayed as visible
+        // user messages. The locked choice/message is already in state.
+        runReply(set, get, lastUserMessage, {}, undefined, true, get().currentDomain);
+      } else {
+        get().sendMessage(lastUserMessage);
+      }
     }
   },
 

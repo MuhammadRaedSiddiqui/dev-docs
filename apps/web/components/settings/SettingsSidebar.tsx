@@ -14,7 +14,7 @@ export function SettingsSidebar({active,onChange,apiKeyConnected}:Props) {
         {SECTIONS.map(s=>(
           <button key={s.id} type="button" onClick={()=>onChange(s.id)} className={cn("w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-[14px] mb-0.5 transition-colors text-left",active===s.id?"bg-hover-veil text-ink font-medium":"text-ink-muted hover:bg-hover-veil hover:text-ink")}>
             {s.label}
-            {s.id==="apikey"&&<span className="w-1.5 h-1.5 rounded-full ml-auto flex-shrink-0 bg-ink" aria-label={apiKeyConnected ? "API key connected" : "No API key connected"}/>}
+            {s.id === "apikey" && <span className={cn("w-1.5 h-1.5 rounded-full ml-auto flex-shrink-0", apiKeyConnected ? "bg-ink" : "bg-ink/20")} aria-label={apiKeyConnected ? "API key connected" : "No API key connected"} />}
           </button>
         ))}
       </nav>

@@ -5,7 +5,7 @@ import Link from "next/link";
 import { Navbar } from "@/components/layout/Navbar";
 import { TEMPLATES, type Template } from "@/lib/templates";
 import { PROJECT_TYPE_LABELS } from "@/lib/types";
-import { PROJECT_TYPE_BADGE_CLASS } from "@/lib/mock-projects";
+import { PROJECT_TYPE_BADGE_CLASS } from "@/lib/types";
 import { trpc } from "@/lib/trpc";
 import { cn } from "@/lib/utils";
 
@@ -34,7 +34,6 @@ export default function TemplatesPage() {
             lockedContext: selected.lockedContext,
             lockedChoices: selected.lockedChoices,
             completedDomains: [],
-            domainContent: {},
             conversationHistory: [],
             elaboration: selected.elaboration,
           },

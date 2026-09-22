@@ -22,6 +22,5 @@ serve({
   logger.info({ port: info.port, framework: 'Hono' }, 'Hono server started');
   console.log(`🚀  @devdocs/api (Hono) running at http://localhost:${info.port}`);
   console.log(`    Health:   http://localhost:${info.port}/health`);
-  console.log(`    Projects: http://localhost:${info.port}/projects`);
   console.log(`    tRPC:       http://localhost:${info.port}/trpc`);
 });

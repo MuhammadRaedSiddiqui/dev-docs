@@ -20,6 +20,9 @@
     "lint": {
       "dependsOn": ["^lint"]
     },
+    "test": {
+      "cache": false
+    },
     "clean": {
       "cache": false
     }

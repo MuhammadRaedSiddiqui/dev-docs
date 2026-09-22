@@ -15,7 +15,7 @@ export const metadata: Metadata = {
     template: "%s | DevDocs AI",
   },
   description:
-    "Interview with AI before you write a line of code. Get a complete 10-file documentation bundle ready for Claude Code, Cursor, and Windsurf.",
+    "Interview with AI before you write a line of code. Generate a project-specific documentation bundle for your coding workflow.",
   keywords: ["AI", "developer tools", "documentation", "planning", "Next.js", "Claude"],
   authors:  [{ name: "DevDocs AI" }],
   creator:  "DevDocs AI",
@@ -46,6 +46,11 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
+    // NOTE: Clerk CDN script versions are pinned via NEXT_PUBLIC_CLERK_JS_VERSION /
+    // NEXT_PUBLIC_CLERK_UI_VERSION (see .env.local). The loader otherwise requests
+    // unpinned aliases (@clerk/clerk-js@6, @clerk/ui@1), which the Clerk CDN
+    // 307-redirects — and browsers refuse redirects on CORS preflights, breaking
+    // sign-in with "Failed to load Clerk JS".
     <ClerkProvider>
       <TRPCProvider>
         <html lang="en">

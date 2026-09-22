@@ -10,8 +10,8 @@ export interface AIConfig {
 }
 
 export interface StreamCallbacks {
-  onToken: (accumulated: string) => void;
-  onDone:  (fullText: string)    => void;
+  onToken: (delta: string) => void;
+  onDone:  (fullText: string) => void | Promise<void>;
   onError: (type: string, message: string) => void;
 }
 
@@ -84,11 +84,11 @@ async function streamAnthropic(
 
     stream.on("text", delta => {
       accumulated += delta;
-      callbacks.onToken(accumulated);
+      callbacks.onToken(delta);
     });
 
     await stream.finalMessage();
-    callbacks.onDone(accumulated);
+    await callbacks.onDone(accumulated);
   } catch (err: unknown) {
     if (isAbort(err)) return;
     callbacks.onError(...mapAnthropicError(err));
@@ -122,11 +122,11 @@ async function streamOpenAI(
       const delta = chunk.choices[0]?.delta?.content ?? "";
       if (delta) {
         accumulated += delta;
-        callbacks.onToken(accumulated);
+        callbacks.onToken(delta);
       }
     }
 
-    callbacks.onDone(accumulated);
+    await callbacks.onDone(accumulated);
   } catch (err: unknown) {
     if (isAbort(err)) return;
     callbacks.onError(...mapOpenAIError(err));
@@ -163,11 +163,11 @@ async function streamMetaMuse(
       const delta = chunk.choices[0]?.delta?.content ?? "";
       if (delta) {
         accumulated += delta;
-        callbacks.onToken(accumulated);
+        callbacks.onToken(delta);
       }
     }
 
-    callbacks.onDone(accumulated);
+    await callbacks.onDone(accumulated);
   } catch (err: unknown) {
     if (isAbort(err)) return;
     callbacks.onError(...mapMetaMuseError(err));
@@ -203,11 +203,11 @@ async function streamBedrock(
 
     stream.on("text", (delta: string) => {
       accumulated += delta;
-      callbacks.onToken(accumulated);
+      callbacks.onToken(delta);
     });
 
     await stream.finalMessage();
-    callbacks.onDone(accumulated);
+    await callbacks.onDone(accumulated);
   } catch (err: unknown) {
     if (isAbort(err)) return;
     callbacks.onError(...mapBedrockError(err));

@@ -8,6 +8,13 @@
       "when": 1784544064719,
       "tag": "0000_curvy_iceman",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1790016734160,
+      "tag": "0001_elite_toad",
+      "breakpoints": true
     }
   ]
 }

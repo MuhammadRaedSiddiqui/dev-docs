@@ -21,6 +21,11 @@ const client = postgres(process.env.DATABASE_URL, { max: 10, prepare: false });
 
 export const db = drizzle(client, { schema });
 
+/** Close the shared connection pool during graceful shutdown and test teardown. */
+export async function closeDatabase(): Promise<void> {
+  await client.end();
+}
+
 export interface ClerkUserIdentity {
   clerkId: string;
   email: string;

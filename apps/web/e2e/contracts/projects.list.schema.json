@@ -1,0 +1,61 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "tRPC projects.list response",
+  "description": "Batched or single tRPC response wrapping an array of projects. Validated only when the URL matches projects.list — never fails unmatched URLs.",
+  "oneOf": [
+    {
+      "type": "object",
+      "required": ["result"],
+      "properties": {
+        "result": {
+          "type": "object",
+          "required": ["data"],
+          "properties": {
+            "data": {
+              "type": "array",
+              "items": { "$ref": "#/definitions/project" }
+            }
+          }
+        }
+      }
+    },
+    {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["result"],
+        "properties": {
+          "result": {
+            "type": "object",
+            "required": ["data"],
+            "properties": {
+              "data": {
+                "oneOf": [
+                  { "type": "array", "items": { "$ref": "#/definitions/project" } },
+                  { "$ref": "#/definitions/project" }
+                ]
+              }
+            }
+          }
+        }
+      }
+    }
+  ],
+  "definitions": {
+    "project": {
+      "type": "object",
+      "required": ["id", "name", "type"],
+      "properties": {
+        "id": { "type": "string", "format": "uuid" },
+        "name": { "type": "string", "minLength": 1 },
+        "type": {
+          "type": "string",
+          "enum": ["saas", "api", "internal_tool", "mobile", "landing_page", "other"]
+        },
+        "status": { "type": "string", "enum": ["in_progress", "complete", "archived"] },
+        "domainsCompleted": { "type": "number" },
+        "description": { "type": "string" }
+      }
+    }
+  }
+}

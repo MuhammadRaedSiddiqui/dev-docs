@@ -1,32 +1,40 @@
 // apps/api/src/test/setup.ts
-import { beforeAll, afterAll, afterEach } from 'vitest';
+import 'dotenv/config';
+import { fileURLToPath } from 'node:url';
+import { beforeAll, afterAll } from 'vitest';
+import { migrate } from 'drizzle-orm/postgres-js/migrator';
+import { sql } from 'drizzle-orm';
 
 // Set test environment
 process.env.NODE_ENV = 'test';
 
-// Use test database URL if available
-if (process.env.DATABASE_URL && !process.env.DATABASE_URL.includes('_test')) {
-  process.env.DATABASE_URL = process.env.DATABASE_URL.replace(/\/[^/]+$/, '/devdocs_test');
+// Never infer a test database by rewriting a development/production URL. Tests
+// truncate their database, so require an explicitly test-named target.
+const testDatabaseUrl = process.env.TEST_DATABASE_URL ?? process.env.DATABASE_URL;
+if (!testDatabaseUrl) {
+  throw new Error('TEST_DATABASE_URL (or DATABASE_URL) is required to run API tests');
 }
+let testDatabaseName: string;
+try {
+  testDatabaseName = new URL(testDatabaseUrl).pathname.split('/').filter(Boolean).at(-1) ?? '';
+} catch {
+  throw new Error('TEST_DATABASE_URL must be a valid PostgreSQL URL');
+}
+if (!testDatabaseName.toLowerCase().includes('_test')) {
+  throw new Error('Refusing to run API tests against a database whose name does not contain "_test"');
+}
+process.env.DATABASE_URL = testDatabaseUrl;
 
-// Use test Redis instance if available
-if (process.env.REDIS_URL && !process.env.REDIS_URL.includes('test')) {
-  process.env.REDIS_URL = process.env.REDIS_URL + '/1'; // Use Redis database 1 for tests
-}
+const migrationsFolder = fileURLToPath(new URL('../../drizzle', import.meta.url));
 
 beforeAll(async () => {
-  // Run migrations on test DB (if needed)
-  // await migrate(db, { migrationsFolder: './drizzle' });
-});
-
-afterEach(async () => {
-  // Clean up after each test
-  // This would delete test data created during the test
-  // await db.delete(projects);
-  // await db.delete(users);
+  const { db } = await import('../lib/db');
+  await migrate(db, { migrationsFolder });
+  await db.execute(sql`TRUNCATE TABLE "users" CASCADE`);
 });
 
 afterAll(async () => {
-  // Close connections
-  // await db.end();
+  const { db, closeDatabase } = await import('../lib/db');
+  await db.execute(sql`TRUNCATE TABLE "users" CASCADE`);
+  await closeDatabase();
 });

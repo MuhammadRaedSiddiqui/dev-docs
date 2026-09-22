@@ -8,6 +8,7 @@ import { eq, and, isNull, desc } from 'drizzle-orm';
 import { db, projects } from '../../lib/db';
 import { ProjectCreateSchema, ProjectUpdateSchema } from '@devdocs/shared';
 import { logger } from '../../lib/logger';
+import { getProjectDocuments } from '../../lib/documents';
 
 export const projectsRouter = router({
   /**
@@ -70,6 +71,8 @@ export const projectsRouter = router({
           });
         }
 
+        const documents = await getProjectDocuments(row.id, row.interviewData);
+
         logger.info({ projectId: row.id, userId }, 'Retrieved project (tRPC)');
         return {
           id:               row.id,
@@ -79,6 +82,7 @@ export const projectsRouter = router({
           description:      row.description ?? '',
           domainsCompleted: countDomains(row.interviewData),
           interviewData:    row.interviewData,
+          documents,
           updatedAt:        timeAgo(row.updatedAt),
         };
       } catch (err) {

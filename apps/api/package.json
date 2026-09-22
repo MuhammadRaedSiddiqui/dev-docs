@@ -12,10 +12,11 @@
     "build": "tsc -p tsconfig.build.json",
     "start": "node dist/hono-server.js",
     "typecheck": "tsc --noEmit",
-    "test": "vitest",
+    "test": "vitest run",
     "test:ui": "vitest --ui",
     "test:coverage": "vitest run --coverage",
-    "test:watch": "vitest watch",
+    "test:watch": "vitest",
+    "db:migrate": "drizzle-kit migrate",
     "clean": "rm -rf dist"
   },
   "dependencies": {

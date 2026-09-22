@@ -66,7 +66,8 @@ export interface InterviewData {
   lockedContext:       ProjectContext | null;
   lockedChoices:       Partial<Record<DomainId, Record<string, string>>>;
   completedDomains:    DomainId[];
-  domainContent:       Partial<Record<DomainId, string>>;
+  /** @deprecated Document bodies are stored in documentation_bundles. */
+  domainContent?:      Partial<Record<DomainId, string>>;
   conversationHistory: ChatMessage[];
   elaboration:         string;
   // Deprecated — retained for backward compat reads, not written by new clients.

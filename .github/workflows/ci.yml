@@ -1,7 +1,6 @@
 # .github/workflows/ci.yml
 # Runs on every push and pull request.
-# Checks: TypeScript across all packages, ESLint on apps/web.
-# Add test steps here once tests are added (see CLAUDE_CODE_PROMPTS.md).
+# Checks: TypeScript, ESLint, API integration tests, E2E, and production builds.
 
 name: CI
 
@@ -81,11 +80,6 @@ jobs:
         ports:
           - 5432:5432
 
-      redis:
-        image: redis:7
-        ports:
-          - 6379:6379
-
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -104,11 +98,15 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Apply database migrations
+        run: pnpm --filter @devdocs/api db:migrate
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/devdocs_test
+
       - name: Run API tests
         run: pnpm --filter @devdocs/api test
         env:
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/devdocs_test
-          REDIS_URL: redis://localhost:6379
           NODE_ENV: test
 
   test-e2e:
@@ -132,11 +130,23 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Install Playwright browsers
-        run: npx playwright install --with-deps
+      - name: Install Playwright browser
+        run: pnpm --filter @devdocs/web exec playwright install --with-deps chromium
 
-      - name: Run E2E tests
-        run: pnpm --filter @devdocs/web playwright test
+      - name: Verify Clerk test configuration
+        env:
+          NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: ${{ secrets.CLERK_PUBLISHABLE_KEY }}
+        run: test -n "$NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY"
+
+      - name: Run deterministic E2E tests
+        run: pnpm --filter @devdocs/web test:e2e
+        env:
+          CI: "true"
+          NEXT_PUBLIC_API_URL: http://localhost:4000
+          NEXT_PUBLIC_APP_URL: http://localhost:3000
+          NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: ${{ secrets.CLERK_PUBLISHABLE_KEY }}
+          NEXT_PUBLIC_CLERK_JS_VERSION: 6.25.5
+          NEXT_PUBLIC_CLERK_UI_VERSION: 1.25.5
 
       - name: Upload Playwright report
         uses: actions/upload-artifact@v4
