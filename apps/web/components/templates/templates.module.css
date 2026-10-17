@@ -1,0 +1,54 @@
+.page { display: flex; flex-direction: column; height: 100dvh; overflow: hidden; }
+.main { flex: 1; overflow-y: auto; padding: 24px 20px 40px; }
+.content { width: 100%; max-width: 1160px; margin: 0 auto; }
+.back { display: inline-flex; align-items: center; gap: 6px; min-height: 32px; margin-bottom: 16px; color: var(--color-mid-ash); font-size: 14px; text-decoration: none; }
+.back:hover { color: var(--color-graphite-ink); text-decoration: underline; text-underline-offset: 4px; }
+.header { margin-bottom: 28px; }
+.heading { margin-bottom: 6px; font-size: 26px; font-weight: 600; line-height: 1.3; }
+.description { color: var(--color-mid-ash); font-size: 15px; line-height: 1.6; overflow-wrap: anywhere; }
+.grid { display: grid; grid-template-columns: minmax(0, 1fr); align-items: stretch; gap: 20px; }
+.card { display: flex; flex-direction: column; gap: 12px; min-width: 0; padding: 20px; border: 1px solid var(--color-hairline); border-radius: var(--radius-lg); background: var(--color-pure-white); }
+.badge { align-self: flex-start; padding: 3px 8px; background: var(--color-sidebar-mist); color: var(--color-mid-ash); font-size: 12px; font-weight: 500; }
+.title { font-size: 18px; line-height: 1.4; font-weight: 600; overflow-wrap: anywhere; }
+.metadata { display: grid; gap: 12px; color: var(--color-mid-ash); font-size: 14px; line-height: 1.5; overflow-wrap: anywhere; }
+.metadata dt { color: var(--color-graphite-ink); font-weight: 500; margin-bottom: 2px; }
+.cardActions { display: flex; flex-direction: column; gap: 8px; margin-top: auto; padding-top: 12px; }
+.button, .primary, .textButton { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 10px 14px; border: 1px solid var(--color-hairline); border-radius: var(--radius-lg); color: var(--color-graphite-ink); font-size: 14px; line-height: 1.4; font-weight: 500; transition: background-color 150ms ease; }
+.button { background: var(--color-sidebar-mist); }
+.button:hover { background: var(--color-hover-veil); }
+.button:active, .textButton:active { background: var(--color-edge-gray); }
+.textButton { border-color: transparent; background: transparent; color: var(--color-mid-ash); }
+.textButton:hover { background: var(--color-sidebar-mist); color: var(--color-graphite-ink); }
+.primary { background: var(--color-graphite-ink); border-color: var(--color-graphite-ink); color: var(--color-pure-white); }
+.primary:hover { background: var(--color-mid-ash); }
+.primary:active { background: var(--color-ink-press); }
+.button:disabled, .primary:disabled { opacity: .45; cursor: not-allowed; }
+.helper { color: var(--color-mid-ash); font-size: 13px; line-height: 1.5; }
+.cardActions .helper { text-align: center; }
+.page a:focus-visible, .page button:focus-visible, .dialog :is(button, input, select, summary):focus-visible { outline: 2px solid var(--color-graphite-ink); outline-offset: 3px; }
+.dialog { position: fixed; inset: 0; margin: auto; padding: 0; width: 620px; max-width: calc(100vw - 32px); max-height: calc(100dvh - 32px); overflow: hidden; border: 1px solid var(--color-hairline); border-radius: var(--radius-lg); background: var(--color-pure-white); color: var(--color-graphite-ink); }
+.dialog::backdrop { background: rgb(13 13 13 / 40%); }
+.dialogLayout { display: flex; flex-direction: column; max-height: calc(100dvh - 34px); }
+.dialogHeader { padding: 20px; border-bottom: 1px solid var(--color-hairline); flex-shrink: 0; }
+.dialogTitle { font-size: 22px; line-height: 1.35; font-weight: 600; margin-bottom: 8px; overflow-wrap: anywhere; }
+.dialogTitle:focus { outline: none; }
+.dialogContent { padding: 20px; overflow-y: auto; min-height: 0; overscroll-behavior: contain; }
+.dialogContent:focus-visible { outline: 2px solid var(--color-graphite-ink); outline-offset: -3px; }
+.section + .section { margin-top: 24px; }
+.section h3 { font-size: 15px; font-weight: 600; margin-bottom: 12px; }
+.detailRows { font-size: 14px; line-height: 1.5; }
+.detailRows > div { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; padding: 9px 0; border-bottom: 1px solid var(--color-hairline); }
+.detailRows dt { color: var(--color-mid-ash); }
+.detailRows dd { overflow-wrap: anywhere; }
+.note { margin-top: 24px; padding: 14px; background: var(--color-sidebar-mist); border-radius: 6px; color: var(--color-mid-ash); font-size: 14px; line-height: 1.6; }
+.dialogActions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; padding: 16px 20px; border-top: 1px solid var(--color-hairline); flex-shrink: 0; }
+.dialogActions .helper { flex-basis: 100%; }
+.field { display: block; margin-bottom: 16px; font-size: 14px; font-weight: 500; }
+.field input, .field select { display: block; margin-top: 6px; width: 100%; min-height: 44px; padding: 10px 12px; border: 1px solid var(--color-hairline); border-radius: 6px; background: var(--color-pure-white); color: var(--color-graphite-ink); font-size: 14px; font-weight: 400; }
+.customize { margin-top: 20px; }
+.customize summary { cursor: pointer; padding: 10px 0; color: var(--color-graphite-ink); font-size: 14px; font-weight: 500; }
+.customize[open] summary { margin-bottom: 12px; }
+.error { margin-top: 16px; color: var(--danger); font-size: 14px; }
+@media (min-width: 640px) { .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .main { padding: 28px 32px 48px; } .card { padding: 24px; } .dialogHeader, .dialogContent { padding: 24px; } .dialogActions { padding: 16px 24px; } }
+@media (min-width: 1024px) { .grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px; } }
+@media (max-width: 380px) { .dialogActions .button, .dialogActions .primary { width: 100%; } .detailRows > div { grid-template-columns: minmax(0, 1fr); gap: 2px; } }

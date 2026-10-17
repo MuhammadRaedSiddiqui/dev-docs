@@ -1,0 +1,131 @@
+import { test, expect } from '../lib/mock-fixtures';
+import { project } from '../lib/mocks/application';
+import { WorkspacePage } from '../lib/pages/WorkspacePage';
+
+const label = 'Search projects and documents';
+
+test('macOS search uses Command K', async ({ page }, info) => {
+  await page.addInitScript(() => Object.defineProperty(navigator, 'platform', { get: () => 'MacIntel' }));
+  const ui = new WorkspacePage(page, info);
+  await ui.goto('/dashboard');
+  const trigger = page.getByRole('button', { name: label, exact: true });
+  await expect(trigger).toHaveAttribute('aria-keyshortcuts', 'Meta+K');
+  if (page.viewportSize()!.width >= 640) await expect(trigger.locator('kbd')).toHaveText('⌘K');
+  await page.keyboard.press('Meta+k');
+  await expect(page.getByRole('combobox', { name: label })).toBeFocused();
+  await page.keyboard.press('Escape');
+});
+
+test('search manages modal focus, platform shortcuts and mobile margins', async ({ page }, info) => {
+  const ui = new WorkspacePage(page, info);
+  await ui.goto('/dashboard');
+  const trigger = page.getByRole('button', { name: label, exact: true });
+  await trigger.click();
+  const dialog = page.getByRole('dialog', { name: label });
+  const input = dialog.getByRole('combobox', { name: label });
+  await expect(input).toBeFocused();
+  await expect(dialog.getByText(`${label} by name.`)).toBeVisible();
+  const box = (await dialog.boundingBox())!;
+  expect(box.width).toBeLessThanOrEqual(640);
+  expect(box.x).toBeGreaterThanOrEqual(16);
+  expect(box.x + box.width).toBeLessThanOrEqual(page.viewportSize()!.width - 16);
+  expect((await input.boundingBox())!.height).toBeGreaterThanOrEqual(44);
+  const mac = await page.evaluate(() => /Mac|iPhone|iPad|iPod/.test(navigator.platform));
+  await expect(trigger).toHaveAttribute('aria-keyshortcuts', mac ? 'Meta+K' : 'Control+K');
+  if (page.viewportSize()!.width >= 640) await expect(trigger.locator('kbd')).toHaveText(mac ? '⌘K' : 'Ctrl+K');
+  await input.press('Tab');
+  await expect(dialog.getByRole('button', { name: 'Close search' })).toBeFocused();
+  await page.keyboard.press('Tab');
+  expect(await dialog.evaluate(element => element.contains(document.activeElement))).toBe(true);
+  await page.keyboard.press('Escape');
+  await expect(dialog).toHaveCount(0);
+  await expect(trigger).toBeFocused();
+  await page.keyboard.press(mac ? 'Meta+k' : 'Control+k');
+  await expect(input).toBeFocused();
+  await input.fill('missing');
+  await expect(dialog.getByText('No results found', { exact: true })).toBeVisible();
+  await input.press('ArrowDown');
+  await input.press('Enter');
+  await expect(dialog).toBeVisible();
+  await dialog.getByRole('button', { name: 'Close search' }).click();
+  await expect(trigger).toBeFocused();
+  // Shortcuts in an ordinary editable field must not steal focus.
+  await ui.click('New project');
+  const name = page.getByRole('textbox', { name: 'Project name', exact: true });
+  await name.fill('Typing a project name');
+  await name.press(mac ? 'Meta+k' : 'Control+k');
+  await expect(page.getByRole('dialog', { name: label })).toHaveCount(0);
+});
+
+test('search groups saved documents, preserves names and navigates with arrows', async ({ page, app }, info) => {
+  test.setTimeout(120_000);
+  const first = project('saas', 1);
+  const second = project('saas', 1);
+  second.id = '00000000-0000-4000-a000-000000000002';
+  second.name = 'Team Planner for international customer success and operations';
+  second.documents = second.documents.map(doc => ({ ...doc, id: `${second.id}-${doc.domainId}`, projectId: second.id }));
+  app.projects = [first, second];
+  const ui = new WorkspacePage(page, info);
+  await ui.goto('/dashboard');
+  await ui.click(label);
+  const dialog = page.getByRole('dialog', { name: label });
+  const input = dialog.getByRole('combobox');
+  await input.fill('Team Planner');
+  await expect(dialog.getByRole('group', { name: 'Projects', exact: true }).getByRole('option')).toHaveCount(2);
+  const documents = dialog.getByRole('group', { name: 'Documents', exact: true }).getByRole('option');
+  await expect(documents).toHaveCount(2);
+  await expect(documents.nth(0)).toContainText(first.name);
+  await expect(documents.nth(1)).toContainText(second.name);
+  await expect(dialog.getByRole('option', { selected: true })).toContainText(first.name);
+  await input.press('ArrowDown');
+  await expect(dialog.getByRole('option', { selected: true })).toContainText(second.name);
+  await input.press('ArrowUp');
+  await input.press('ArrowDown');
+  await input.press('ArrowDown');
+  await expect(documents.nth(0)).toHaveAttribute('aria-selected', 'true');
+  await expect(input).toHaveAttribute('aria-activedescendant', (await documents.nth(0).getAttribute('id'))!);
+  await page.screenshot({ path: info.outputPath('search-results.png') });
+  await input.press('Enter');
+  await expect(page).toHaveURL(`/docs?domain=${first.documents[0].domainId}`, { timeout: 60_000 });
+  await expect(dialog).toHaveCount(0);
+});
+
+test('search reports document fetch failure and retries without losing the query', async ({ page, app }, info) => {
+  app.projects = [project('saas', 1)];
+  app.fail('documents.list');
+  const ui = new WorkspacePage(page, info);
+  await ui.goto('/dashboard');
+  await ui.click(label);
+  const dialog = page.getByRole('dialog', { name: label });
+  const input = dialog.getByRole('combobox');
+  await input.fill('Team Planner');
+  await expect(dialog.getByRole('alert')).toHaveText('Could not load documents. Try again.');
+  await expect(dialog.getByRole('group', { name: 'Projects', exact: true }).getByRole('option')).toHaveCount(1);
+  await expect(dialog.getByText('No results found')).toHaveCount(0);
+  delete app.failures['documents.list'];
+  await dialog.getByRole('button', { name: 'Retry', exact: true }).click();
+  await expect(dialog.getByRole('alert')).toHaveCount(0);
+  await expect(input).toHaveValue('Team Planner');
+  await expect(input).toBeFocused();
+  await expect(dialog.getByRole('group', { name: 'Documents', exact: true }).getByRole('option')).toHaveCount(1);
+});
+
+test('a pending library response uses the newest query', async ({ page, app }, info) => {
+  app.projects = [project('saas', 1)];
+  const ui = new WorkspacePage(page, info);
+  await ui.goto('/dashboard');
+  let release!: () => void;
+  const pending = new Promise<void>(resolve => { release = resolve; });
+  await page.route('**/trpc/*documents.list*', async route => { await pending; await route.fallback(); });
+  await ui.click(label);
+  const dialog = page.getByRole('dialog', { name: label });
+  const input = dialog.getByRole('combobox');
+  await input.fill('Team Planner');
+  await expect(dialog.getByRole('status')).toContainText('Loading search results');
+  await input.fill('A completely different name');
+  release();
+  await expect(dialog.getByText('No results found')).toBeVisible();
+  await expect(dialog.getByRole('option')).toHaveCount(0);
+  await input.fill('Team Planner');
+  await expect(dialog.getByRole('group', { name: 'Documents', exact: true }).getByRole('option')).toHaveCount(1);
+});

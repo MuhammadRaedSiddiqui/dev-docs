@@ -10,9 +10,11 @@ export type ProjectType =
   | "landing_page"
   | "other";
 
-export type TeamSize       = "solo" | "small" | "medium" | "large";
-export type Timeline       = "under_1_month" | "1_3_months" | "3_6_months" | "6_plus_months";
-export type Budget         = "bootstrapped" | "self_funded" | "funded";
+// Legacy categories remain readable; new selections use explicit boundaries.
+export type TeamSize       = "solo" | "small" | "medium" | "large" | "eleven_plus";
+export type Timeline       = "under_1_month" | "1_3_months" | "3_6_months" | "6_plus_months" | "1_under_3_months" | "3_under_6_months" | "not_sure";
+// `budget` is the persisted funding category, never a spending limit.
+export type Budget         = "bootstrapped" | "self_funded" | "funded" | "not_sure";
 export type ExperienceLevel = "beginner" | "intermediate" | "experienced";
 
 export interface ProjectContext {
@@ -84,11 +86,14 @@ export interface AIProviderConfig {
   model:    string;
 }
 
+// Muse reasoning and visible text share this total output budget.
+export const META_MUSE_MAX_COMPLETION_TOKENS = 4000;
+
 export const PROVIDER_MODELS: Record<AIProvider, { default: string; label: string }> = {
   anthropic: { default: "claude-sonnet-4-6",                        label: "Claude Sonnet 4.6" },
   openai:    { default: "gpt-4o",                                    label: "GPT-4o" },
   bedrock:   { default: "us.anthropic.claude-sonnet-4-5-20250929-v1:0", label: "Claude via Bedrock" },
-  metamuse:  { default: "muse-spark-1.1",                            label: "Muse Spark 1.1" },
+  metamuse:  { default: "muse-spark-1.3-contributor",                label: "Muse Spark 1.3 Contributor" },
 };
 
 export const BEDROCK_MODELS: { id: string; label: string }[] = [

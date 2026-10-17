@@ -10,7 +10,7 @@ const ALGORITHM = "aes-256-gcm";
 
 function getKey(): Buffer {
   const hex = process.env.ENCRYPTION_KEY;
-  if (!hex || hex.length !== 64) {
+  if (!hex || !/^[a-fA-F0-9]{64}$/.test(hex)) {
     throw new Error("ENCRYPTION_KEY must be a 64-character hex string (32 bytes)");
   }
   return Buffer.from(hex, "hex");
@@ -57,7 +57,7 @@ export function decryptKey(ciphertext: string): string {
  */
 export function maskKey(key: string): string {
   if (key.length < 8) return "••••••••";
-  const prefix = key.slice(0, Math.min(12, key.length - 4));
+  const prefix = key.slice(0, Math.min(12, Math.max(0, key.length - 8)));
   const suffix = key.slice(-4);
   return `${prefix}••••••••••••${suffix}`;
 }

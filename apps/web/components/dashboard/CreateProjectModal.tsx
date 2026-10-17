@@ -1,15 +1,17 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
+import { ProjectCreateSchema } from "@devdocs/shared";
 import { useAuth } from "@clerk/nextjs";
 import { cn } from "@/lib/utils";
 import type { ProjectType } from "@/lib/types";
 import { type AIProvider, ACTIVE_PROVIDER_KEY } from "@/lib/ai/provider";
 import { fetchKeys, saveKey } from "@/lib/ai/keys";
+import s from "./dashboard.module.css";
 
 interface Props {
   open: boolean;
   onClose: () => void;
-  onCreate: (name: string, type: ProjectType) => void;
+  onCreate: (name: string, type: ProjectType) => Promise<unknown>;
   creating?: boolean;
 }
 
@@ -35,16 +37,25 @@ export function CreateProjectModal({ open, onClose, onCreate, creating }: Props)
   const [verifying, setVerifying] = useState(false);
   const [verifyError, setVerifyError] = useState<string | null>(null);
   const [checkingKeys, setCheckingKeys] = useState(false);
+  const submissionInFlight = useRef(false);
+  const wasOpen = useRef(false);
+  const [createError, setCreateError] = useState<string | null>(null);
+  const [nameTouched, setNameTouched] = useState(false);
   const [bedrockStatus, setBedrockStatus] = useState<{ configured: boolean; region: string | null; model: string | null } | null>(null);
 
   useEffect(() => {
-    if (!open) return;
-    setStep("details");
-    setName("");
-    setType(null);
-    setKeyInput("");
-    setVerifyError(null);
-    setHasKey(null);
+    if (!open) { wasOpen.current = false; return; }
+    if (!wasOpen.current) {
+      wasOpen.current = true;
+      setStep("details");
+      setName("");
+      setType(null);
+      setKeyInput("");
+      setVerifyError(null);
+      setHasKey(null);
+      setCreateError(null);
+      setNameTouched(false);
+    }
     setCheckingKeys(true);
 
     const apiBase = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
@@ -71,7 +82,7 @@ export function CreateProjectModal({ open, onClose, onCreate, creating }: Props)
 
   if (creating) {
     return (
-      <div className="fixed inset-0 bg-ink/40 flex items-center justify-center z-50">
+      <div className={cn("fixed inset-0 flex items-center justify-center z-50", s.projectModalBackdrop)}>
         <div className="bg-white border border-hairline rounded-lg w-[480px] overflow-hidden">
           <div className="px-6 py-16 flex flex-col items-center gap-4">
             <div className="w-8 h-8 border-2 border-ink/20 border-t-ink rounded-full animate-spin" />
@@ -85,17 +96,31 @@ export function CreateProjectModal({ open, onClose, onCreate, creating }: Props)
     );
   }
 
+  async function submitProject() {
+    const parsed = ProjectCreateSchema.safeParse({ name, type });
+    if (!parsed.success || creating || submissionInFlight.current) return;
+    submissionInFlight.current = true;
+    setCreateError(null);
+    try {
+      await onCreate(parsed.data.name, parsed.data.type);
+    } catch (error) {
+      setCreateError(error instanceof Error ? error.message : "Could not create project. Please try again.");
+    } finally {
+      submissionInFlight.current = false;
+    }
+  }
+
   function handleNext() {
-    if (!name.trim() || !type) return;
+    if (!ProjectCreateSchema.safeParse({ name, type }).success || checkingKeys || creating || submissionInFlight.current) return;
     if (hasKey) {
-      onCreate(name.trim(), type);
+      void submitProject();
     } else {
       setStep("apikey");
     }
   }
 
   async function handleVerifyAndCreate() {
-    if (provider === "bedrock") return;
+    if (provider === "bedrock" || verifying || creating || submissionInFlight.current) return;
     const key = keyInput.trim();
     if (!key) return;
 
@@ -113,9 +138,11 @@ export function CreateProjectModal({ open, onClose, onCreate, creating }: Props)
     }
 
     setVerifying(true);
+    submissionInFlight.current = true;
     setVerifyError(null);
 
     const { maskedKey, error } = await saveKey(getToken, provider, key);
+    submissionInFlight.current = false;
     if (error || !maskedKey) {
       setVerifying(false);
       setVerifyError(error ?? "Invalid API key. Please check the key and try again.");
@@ -124,13 +151,14 @@ export function CreateProjectModal({ open, onClose, onCreate, creating }: Props)
 
     localStorage.setItem(ACTIVE_PROVIDER_KEY, provider);
     setVerifying(false);
-    onCreate(name.trim(), type!);
+    setHasKey(true);
+    await submitProject();
   }
 
   if (step === "apikey") {
     return (
       <div
-        className="fixed inset-0 bg-ink/40 flex items-center justify-center z-50"
+        className={cn("fixed inset-0 flex items-center justify-center z-50", s.projectModalBackdrop)}
         onClick={e => { if (e.target === e.currentTarget) onClose(); }}
       >
         <div className="bg-white border border-hairline rounded-lg w-[480px] overflow-hidden">
@@ -141,6 +169,7 @@ export function CreateProjectModal({ open, onClose, onCreate, creating }: Props)
             </p>
           </div>
           <div className="px-6 py-5">
+            {createError && <p role="alert" className="text-[13px] text-ink-muted mb-4">{createError}</p>}
             {/* Provider selection */}
             <div className="mb-4">
               <label className="block text-[13px] font-medium text-ink mb-1.5">Provider</label>
@@ -193,7 +222,9 @@ export function CreateProjectModal({ open, onClose, onCreate, creating }: Props)
                     {provider === "anthropic" ? "Anthropic" : provider === "openai" ? "OpenAI" : "Meta Muse"} API key
                   </label>
                   <input
-                    type="text"
+                    type="password"
+                    aria-label="Provider API key"
+                    autoComplete="off"
                     value={keyInput}
                     onChange={e => { setKeyInput(e.target.value); setVerifyError(null); }}
                     onKeyDown={e => e.key === "Enter" && handleVerifyAndCreate()}
@@ -234,6 +265,7 @@ export function CreateProjectModal({ open, onClose, onCreate, creating }: Props)
             <button
               type="button"
               onClick={() => setStep("details")}
+              disabled={verifying}
               className="px-4 py-2 border border-vellum-border rounded-lg text-[13px] bg-white text-ink-secondary"
             >
               Back
@@ -243,11 +275,11 @@ export function CreateProjectModal({ open, onClose, onCreate, creating }: Props)
                 type="button"
                 onClick={() => {
                   localStorage.setItem(ACTIVE_PROVIDER_KEY, "bedrock");
-                  onCreate(name.trim(), type!);
+                  void submitProject();
                 }}
                 className="px-5 py-2 bg-ink text-vellum rounded-lg text-[13px] font-medium"
               >
-                Start planning →
+                Create project →
               </button>
             ) : (
               <button
@@ -256,7 +288,7 @@ export function CreateProjectModal({ open, onClose, onCreate, creating }: Props)
                 onClick={handleVerifyAndCreate}
                 className="px-5 py-2 bg-ink text-vellum rounded-lg text-[13px] font-medium disabled:opacity-35 disabled:cursor-not-allowed"
               >
-                {verifying ? "Verifying..." : "Verify & start planning →"}
+                {verifying ? "Verifying..." : "Verify & create project →"}
               </button>
             )}
           </div>
@@ -267,15 +299,16 @@ export function CreateProjectModal({ open, onClose, onCreate, creating }: Props)
 
   return (
     <div
-      className="fixed inset-0 bg-ink/40 flex items-center justify-center z-50"
+      className={cn("fixed inset-0 flex items-center justify-center z-50", s.projectModalBackdrop)}
       onClick={e => { if (e.target === e.currentTarget) onClose(); }}
     >
         <div className="bg-white border border-hairline rounded-lg w-[480px] overflow-hidden">
         <div className="px-6 pt-5 pb-4 border-b border-vellum-border">
           <h3 className="font-serif-heading text-lg text-ink">New project</h3>
-          <p className="text-[13px] text-ink-muted mt-1">Name your project and pick a type — then the AI takes over.</p>
+          <p className="text-[13px] text-ink-muted mt-1">Name your project and choose a type. Next, answer a few setup questions.</p>
         </div>
         <div className="px-6 py-5">
+          {createError && <p role="alert" className="text-[13px] text-ink-muted mb-4">{createError}</p>}
           <div className="mb-4">
             <label htmlFor="proj-name" className="block text-[13px] font-medium text-ink mb-1.5">Project name</label>
             <input
@@ -283,9 +316,15 @@ export function CreateProjectModal({ open, onClose, onCreate, creating }: Props)
               type="text"
               value={name}
               onChange={e => setName(e.target.value)}
+              onBlur={() => setNameTouched(true)}
+              aria-invalid={nameTouched && (name.trim().length === 0 || name.trim().length > 100)}
+              aria-describedby="project-name-hint"
               placeholder="e.g. TaskFlow SaaS"
               className="w-full px-3 py-2.5 border border-ink/15 rounded-vellum text-[13px] bg-white text-ink focus:outline-none focus:border-ink/30"
             />
+            <div id="project-name-hint" className="text-[11px] text-ink-muted mt-1.5" aria-live="polite">
+              {nameTouched && !name.trim() ? "Enter a project name." : name.trim().length > 100 ? "Use 100 characters or fewer." : null}
+            </div>
           </div>
           <div>
             <label className="block text-[13px] font-medium text-ink mb-1.5">What are you building?</label>
@@ -294,6 +333,7 @@ export function CreateProjectModal({ open, onClose, onCreate, creating }: Props)
                 <button
                   key={t.id}
                   type="button"
+                  aria-pressed={type === t.id}
                   onClick={() => setType(t.id)}
                   className={cn(
                     "p-2.5 border rounded-lg text-center transition-all bg-white",
@@ -313,11 +353,11 @@ export function CreateProjectModal({ open, onClose, onCreate, creating }: Props)
           </button>
           <button
             type="button"
-            disabled={!name.trim() || !type || checkingKeys || creating}
+            disabled={!ProjectCreateSchema.safeParse({ name, type }).success || checkingKeys || creating}
             onClick={handleNext}
             className="px-5 py-2 bg-ink text-vellum rounded-lg text-[13px] font-medium disabled:opacity-35 disabled:cursor-not-allowed"
           >
-            {checkingKeys ? "Checking..." : hasKey ? "Start planning →" : "Next →"}
+            {checkingKeys ? "Checking..." : "Create project →"}
           </button>
         </div>
       </div>

@@ -1,6 +1,7 @@
 "use client";
 import { cn } from "@/lib/utils";
 import type { Project } from "@/lib/types";
+import s from "./dashboard.module.css";
 
 interface Props {
   projects: Project[];
@@ -24,37 +25,37 @@ export function DashboardSidebar({ projects, statusFilter, typeFilter, onStatusF
     complete: projects.filter(project => project.status === "complete").length,
   };
   return (
-    <aside className="w-[260px] flex-shrink-0 border-r border-hairline bg-sidebar-mist flex flex-col py-4 overflow-y-auto">
+    <aside className="w-full md:w-[260px] max-h-[180px] md:max-h-none flex-shrink-0 border-r border-hairline bg-sidebar-mist flex flex-col py-4 overflow-y-auto">
       <div className="px-4 mb-5">
-        <button type="button" onClick={onNewProject} className="w-full py-2 px-2.5 bg-white text-ink border border-hairline rounded-lg text-[14px] font-medium flex items-center gap-2 hover:bg-hover-veil transition-colors">
-          <span className="text-base leading-none">+</span> New project
+        <button type="button" onClick={onNewProject} className={s.primaryAction}>
+          <span aria-hidden="true" className="text-base leading-none">+</span> New project
         </button>
       </div>
       <div className="px-2 mb-5">
-        <div className="px-2 mb-2 text-[10px] font-medium uppercase tracking-wider text-ink-faint">Views</div>
+        <div className="px-2 mb-2 text-[14px] font-medium text-ink-muted">Views</div>
         {([
           { status: "all" as const, label: "All projects" },
           { status: "in_progress" as const, label: "In progress", dot: true },
           { status: "complete" as const, label: "Complete", dot: true },
         ]).map(({ status, label, dot }) => (
-          <button key={status} type="button" onClick={() => onStatusFilter(status)} className={cn("w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-[14px] transition-colors text-left mb-0.5", statusFilter === status && !typeFilter ? "bg-hover-veil text-ink font-medium" : "text-ink-muted hover:bg-hover-veil hover:text-ink")}>
+          <button key={status} type="button" aria-pressed={statusFilter === status && !typeFilter} onClick={() => onStatusFilter(status)} className={cn("w-full min-h-[44px] flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-[14px] transition-colors text-left mb-0.5", statusFilter === status && !typeFilter ? "bg-hover-veil text-ink font-medium" : "text-ink-muted hover:bg-hover-veil hover:text-ink")}>
             {dot && <span className="w-1.5 h-1.5 rounded-full flex-shrink-0 bg-ink" />}{label}
-            <span className="ml-auto text-[11px] text-ink-faint">{counts[status]}</span>
+            <span className="ml-auto text-[14px] text-ink-muted">{counts[status]}</span>
           </button>
         ))}
       </div>
       <div className="h-px bg-hairline mx-4 mb-4" />
       <div className="px-2 mb-5">
-        <div className="px-2 mb-2 text-[10px] font-medium uppercase tracking-wider text-ink-faint">By type</div>
+        <div className="px-2 mb-2 text-[14px] font-medium text-ink-muted">By type</div>
         {TYPE_FILTERS.map(type => (
-          <button key={type.id} type="button" onClick={() => onTypeFilter(type.id)} className={cn("w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-[14px] transition-colors text-left mb-0.5", typeFilter === type.id ? "bg-hover-veil text-ink font-medium" : "text-ink-muted hover:bg-hover-veil hover:text-ink")}>
+          <button key={type.id} type="button" aria-pressed={typeFilter === type.id} onClick={() => onTypeFilter(type.id)} className={cn("w-full min-h-[44px] flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-[14px] transition-colors text-left mb-0.5", typeFilter === type.id ? "bg-hover-veil text-ink font-medium" : "text-ink-muted hover:bg-hover-veil hover:text-ink")}>
             {type.label}
           </button>
         ))}
       </div>
       <div className="mt-auto mx-4 p-4 bg-white border border-hairline rounded-lg">
-        <div className="text-[11px] font-medium text-ink mb-1">BYOK workspace</div>
-        <div className="text-[11px] text-ink-faint">Your provider bills AI usage directly. DevDocs does not impose a project quota.</div>
+        <div className="text-[14px] font-medium text-ink mb-1">BYOK workspace</div>
+        <div className="text-[14px] text-ink-muted">Your provider bills AI usage directly. DevDocs does not impose a project quota.</div>
       </div>
     </aside>
   );

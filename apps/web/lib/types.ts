@@ -1,17 +1,6 @@
 // lib/types.ts
-export type ProjectType = "saas" | "api" | "internal_tool" | "mobile" | "landing_page" | "other";
-export type TeamSize = "solo" | "small" | "medium" | "large";
-export type Timeline = "under_1_month" | "1_3_months" | "3_6_months" | "6_plus_months";
-export type Budget = "bootstrapped" | "self_funded" | "funded";
-export type ExperienceLevel = "beginner" | "intermediate" | "experienced";
-
-export interface ProjectContext {
-  projectType: ProjectType;
-  teamSize: TeamSize;
-  timeline: Timeline;
-  budget: Budget;
-  experienceLevel: ExperienceLevel;
-}
+import type { ProjectContext, ProjectType } from "@devdocs/shared";
+export type { ProjectType, TeamSize, Timeline, Budget, ExperienceLevel, ProjectContext } from "@devdocs/shared";
 
 export type DomainId =
   | "planning" | "architecture" | "database" | "api" | "environment"

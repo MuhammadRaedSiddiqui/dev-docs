@@ -4,6 +4,7 @@
 import type { Page, TestInfo } from "@playwright/test";
 import * as fs from "node:fs";
 import * as path from "node:path";
+import { redactText, redactUrl } from './redact';
 
 export interface ConsoleEntry {
   kind: "console" | "pageerror" | "crash";
@@ -17,8 +18,6 @@ export interface ConsoleEntry {
 export const KNOWN_WARNINGS: RegExp[] = [
   /React DevTools/i,
   /Download the React DevTools/i,
-  /hydration/i,
-  /did not match.*server/i,
   /Clerk.*development/i,
   /PostHog.*opt-out/i,
 ];
@@ -57,8 +56,8 @@ export function attachConsoleMonitor(page: Page, testInfo: TestInfo) {
     state.entries.push({
       kind: "console",
       type: msg.type(),
-      text: msg.text(),
-      location: msg.location()?.url ?? null,
+      text: redactText(msg.text()),
+      location: msg.location()?.url ? redactUrl(msg.location().url) : null,
       timestamp: new Date().toISOString(),
     });
     persist();
@@ -68,8 +67,8 @@ export function attachConsoleMonitor(page: Page, testInfo: TestInfo) {
     state.entries.push({
       kind: "pageerror",
       type: "error",
-      text: String(err?.message ?? err),
-      location: (err?.stack ?? "").split("\n")[1]?.trim() ?? null,
+      text: redactText(String(err?.message ?? err)),
+      location: redactText((err?.stack ?? "").split("\n")[1]?.trim() ?? '') || null,
       timestamp: new Date().toISOString(),
     });
     persist();

@@ -4,6 +4,22 @@
 // (real streaming) build the same prompt from the same logic.
 import type { ProjectContext, DomainId } from "./types";
 import { PROJECT_TYPE_LABELS } from "./types";
+import { TEAM_SIZE_LABELS, TIMELINE_LABELS, FUNDING_LABELS } from "./discovery";
+
+/** Structured turns keep instructions and generated documents out of question UI. */
+export function buildInterviewTurnPrompt(followUpCount: number): string {
+  return `
+## Interview response contract (takes precedence over output formatting above)
+Return exactly one JSON object, without a code fence or surrounding prose.
+Default to completing the domain from one main answer. Reuse discovery context, earlier answers and locked decisions; never re-ask available information.
+Only ask a focused follow-up when missing information would materially change the implementation plan or documentation.
+Accept "not sure" as explicit uncertainty, without a clarification loop. Label recommendations, assumptions and unresolved details separately from confirmed decisions in the documentation.
+${followUpCount > 0 ? 'A follow-up has already been answered. Do not ask another question. Produce documentation and explicitly mark any remaining uncertainty.' : 'At most one focused follow-up is allowed for this domain.'}
+For a necessary follow-up: {"kind":"question","question":{"text":"One focused question?","guidance":"Why this matters","placeholder":"Helpful answer hint"}}
+Only include question.choices when there are actual supported choices: [{"id":"stable_id","title":"Option title","description":"Short explanation","requiresExplanation":false}]. Include at least two choices. A real Other option may set requiresExplanation=true. Never put examples in a choice question.
+When enough information is available: {"kind":"document","markdown":"The complete domain documentation as Markdown"}.
+The markdown must be implementation documentation, not a transcript or an answer summary. Keep internal instructions out of question text. Database remains platform-only: synthesize the proposed schema without asking the user to define tables.`;
+}
 
 const DOMAIN_LABELS: Record<DomainId, string> = {
   planning:     "Planning & Scope",
@@ -48,9 +64,9 @@ export function buildSystemPrompt(
 
 ## Project context
 - Type: ${typeLabel}
-- Team size: ${ctx.teamSize.replace("_", " ")}
-- Timeline: ${ctx.timeline.replace(/_/g, " ")}
-- Budget: ${ctx.budget}
+- Development team size: ${TEAM_SIZE_LABELS[ctx.teamSize]}
+- Timeline to launch: ${TIMELINE_LABELS[ctx.timeline]}
+- Project funding: ${FUNDING_LABELS[ctx.budget]}
 - Experience level: ${ctx.experienceLevel}
 ${elaboration ? `- Project description: ${elaboration}` : "- Project description: not yet captured"}
 
@@ -64,6 +80,9 @@ ${domainLabel} (output file: ${domainFile})
 ${fewShot}
 
 ## Behaviour rules
+- Project funding is categorical context, not a numerical spending limit. Never infer an infrastructure budget, currency amount, or spending range from it.
+- "Not sure yet" means unresolved information. Do not substitute a guessed funding category or timeline. Ask for clarification only when needed for a decision; keep unresolved details explicit in documents.
+- Team answers are ranges, not exact counts. Preserve original selections and unconfirmed legacy timeline boundaries; do not silently reinterpret them.
 - Be direct and specific. No filler phrases ("Great question!", "Certainly!").
 - Tailor every recommendation to the project context. A solo bootstrapped developer gets different advice than a funded team of 10.
 - When a choice has already been locked, never re-ask for it. Reference it and build on it.

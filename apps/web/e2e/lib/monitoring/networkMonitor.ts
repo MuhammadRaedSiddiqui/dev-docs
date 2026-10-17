@@ -2,11 +2,13 @@
 // Per-test HTTP log + opt-in JSON-Schema contract validation.
 // Contract checking only applies to URLs matching a provided pattern —
 // unmatched URLs are logged but never fail.
-import type { Page, TestInfo } from "@playwright/test";
+import type { Page, TestInfo, Response } from "@playwright/test";
 import Ajv, { type ErrorObject } from "ajv";
 import addFormats from "ajv-formats";
 import * as fs from "node:fs";
 import * as path from "node:path";
+import { redactText, redactUrl } from './redact';
+import { expectedNavigationCancellation } from './cancellation';
 
 export interface ContractEntry {
   urlPattern: RegExp;
@@ -22,6 +24,7 @@ export interface NetworkEntry {
   responseSize: number | null;
   failed: boolean;
   failureText?: string;
+  cancellationReason?: string;
   timestamp: string;
 }
 
@@ -47,6 +50,7 @@ interface MonitorState {
   validators: { pattern: RegExp; schemaPath: string; validate: (d: unknown) => boolean; errors: () => ErrorObject[] | null | undefined }[];
   file: string;
   attached: boolean;
+  pending: Set<Promise<void>>;
 }
 
 const states = new WeakMap<Page, MonitorState>();
@@ -101,9 +105,13 @@ export function attachNetworkMonitor(
   });
 
   const file = path.join(testInfo.outputDir, "network.json");
-  const state: MonitorState = { entries: [], violations: [], validators, file, attached: false };
+  const existing = states.get(page);
+  if (existing) {
+    existing.validators.push(...validators);
+    return { getFailedRequests: () => getFailedRequests(page), getContractViolations: () => getContractViolations(page) };
+  }
+  const state: MonitorState = { entries: [], violations: [], validators, file, attached: false, pending: new Set() };
   states.set(page, state);
-  const startTimes = new Map<string, number>();
 
   const persist = () => writeLog(testInfo, state);
   // Ensure the file exists even if no requests fire.
@@ -111,12 +119,11 @@ export function attachNetworkMonitor(
 
   page.on("request", (req) => {
     if (shouldIgnore(req.url())) return;
-    startTimes.set(req.url() + "|" + Date.now().toString(), Date.now());
     // Store start keyed by request object identity via a simple map.
     (req as unknown as { __t0?: number }).__t0 = Date.now();
   });
 
-  page.on("response", async (res) => {
+  const handleResponse = async (res: Response) => {
     const req = res.request();
     const url = req.url();
     if (shouldIgnore(url)) return;
@@ -132,7 +139,7 @@ export function attachNetworkMonitor(
     }
     const entry: NetworkEntry = {
       method: req.method(),
-      url,
+      url: redactUrl(url),
       resourceType: req.resourceType(),
       status: res.status(),
       timingMs,
@@ -149,48 +156,57 @@ export function attachNetworkMonitor(
       try {
         body = await res.json();
       } catch {
-        continue; // Skips gracefully if not JSON.
+        state.violations.push({ url: redactUrl(url), schemaPath: v.schemaPath, errors: 'Expected a JSON contract response', timestamp: new Date().toISOString() });
+        continue;
       }
       let ok = false;
       try {
         ok = v.validate(body);
       } catch (err) {
         state.violations.push({
-          url,
+          url: redactUrl(url),
           schemaPath: v.schemaPath,
-          errors: String(err),
+          errors: redactText(String(err)),
           timestamp: new Date().toISOString(),
         });
         continue;
       }
       if (!ok) {
         state.violations.push({
-          url,
+          url: redactUrl(url),
           schemaPath: v.schemaPath,
           errors: v.errors() ?? [],
           timestamp: new Date().toISOString(),
         });
       }
     }
-    persist();
+  };
+  page.on("response", res => {
+    const pending = handleResponse(res).catch(error => {
+      state.violations.push({ url: redactUrl(res.url()), schemaPath: 'network-monitor', errors: redactText(String(error)), timestamp: new Date().toISOString() });
+    });
+    state.pending.add(pending);
+    void pending.finally(() => state.pending.delete(pending));
   });
 
   page.on("requestfailed", (req) => {
     const url = req.url();
     if (shouldIgnore(url)) return;
     const t0 = (req as unknown as { __t0?: number }).__t0;
+    const failureText = req.failure()?.errorText ?? "requestfailed";
+    const navigationCancelled = expectedNavigationCancellation(req.method(), url, page.url(), req.headers().rsc, failureText);
     state.entries.push({
       method: req.method(),
-      url,
+      url: redactUrl(url),
       resourceType: req.resourceType(),
       status: null,
       timingMs: typeof t0 === "number" ? Date.now() - t0 : null,
       responseSize: null,
-      failed: true,
-      failureText: req.failure()?.errorText ?? "requestfailed",
+      failed: !navigationCancelled,
+      failureText,
+      ...(navigationCancelled ? { cancellationReason: 'Superseded Next Server Component navigation' } : {}),
       timestamp: new Date().toISOString(),
     });
-    persist();
   });
 
   return {
@@ -199,10 +215,18 @@ export function attachNetworkMonitor(
   };
 }
 
+/** Complete asynchronous response validation and write artifacts once at teardown. */
+export async function flushNetworkMonitor(page: Page, testInfo: TestInfo) {
+  const state = states.get(page);
+  if (!state) return;
+  await Promise.allSettled([...state.pending]);
+  writeLog(testInfo, state);
+}
+
 export function getFailedRequests(page: Page): NetworkEntry[] {
   const state = states.get(page);
   if (!state) return [];
-  // Only first-party failures count — third-party noise is already filtered.
+  // Known telemetry noise is filtered; retain all other failed requests.
   return state.entries.filter((e) => e.failed);
 }
 

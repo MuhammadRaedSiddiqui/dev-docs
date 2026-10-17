@@ -32,14 +32,17 @@ export async function checkRateLimit(
 
   try {
     const redisKey = `ratelimit:${key}`;
-    const count = await redis.incr(redisKey);
-
-  // First hit in this window — set the expiry.
-    if (count === 1) {
-      await redis.expire(redisKey, windowSec);
-    }
-
-    const ttl = await redis.ttl(redisKey);
+    // Increment and expiry must be atomic: a failed EXPIRE after INCR could
+    // otherwise leave a user permanently rate limited. Repair legacy keys too.
+    const [count, ttl] = await redis.eval<[number], [number, number]>(`
+      local count = redis.call('INCR', KEYS[1])
+      local ttl = redis.call('TTL', KEYS[1])
+      if ttl < 0 then
+        redis.call('EXPIRE', KEYS[1], ARGV[1])
+        ttl = tonumber(ARGV[1])
+      end
+      return {count, ttl}
+    `, [redisKey], [windowSec]);
     const resetIn = ttl > 0 ? ttl : windowSec;
 
     if (count > limit) {

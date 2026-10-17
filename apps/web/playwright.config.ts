@@ -34,11 +34,8 @@ export default defineConfig({
     video: "on",
     trace: "retain-on-failure",
     screenshot: "only-on-failure",
-    // NOTE: no extraHTTPHeaders here. A global header (e.g. x-playwright for
-    // the middleware auth bypass) is attached to EVERY request, including
-    // third-party CDN loads (Clerk) — forcing CORS preflights those hosts
-    // reject and breaking sign-in. The bypass is instead enabled server-side
-    // via PLAYWRIGHT=1 (see webServer.env below and middleware.ts).
+    // Live tests always use real Clerk authentication. Only the separate
+    // deterministic development server enables the mock identity.
   },
 
   projects: [
@@ -48,6 +45,7 @@ export default defineConfig({
     },
     {
       name: "chromium",
+      testIgnore: /auth\.setup\.ts/,
       dependencies: ["auth-setup"],
       use: {
         ...devices["Desktop Chrome"],
@@ -64,6 +62,6 @@ export default defineConfig({
     url: BASE_URL,
     reuseExistingServer: !process.env.CI,
     timeout: 180_000,
-    env: { PLAYWRIGHT: "1" },
+    env: { PLAYWRIGHT: "0" },
   },
 });

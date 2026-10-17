@@ -1,6 +1,8 @@
 // lib/interview/choices.ts
 import type { ChoiceOption, DomainId, ProjectContext } from "@/lib/types";
 
+const isLargeTeam = (c: ProjectContext) => c.teamSize === "large" || c.teamSize === "eleven_plus";
+
 export const CARD_CHOICES: Partial<Record<DomainId, ChoiceOption[]>> = {
   architecture: [
     { id: "monolith",      label: "Monolith",          description: "Single codebase, one deployment.", isRecommended: (c) => c.teamSize === "solo" || c.timeline === "under_1_month" },
@@ -15,13 +17,13 @@ export const CARD_CHOICES: Partial<Record<DomainId, ChoiceOption[]>> = {
   environment: [
     { id: "three_envs",   label: "Local + Staging + Prod",  description: "Standard three-environment setup.",          isRecommended: (c) => c.teamSize !== "solo" },
     { id: "two_envs",     label: "Local + Production",       description: "Minimal overhead — good for solo devs.",     isRecommended: (c) => c.teamSize === "solo" },
-    { id: "feature_envs", label: "Per-PR environments",      description: "Ephemeral environments for every branch.",   isRecommended: (c) => c.teamSize === "large" },
+    { id: "feature_envs", label: "Per-PR environments",      description: "Ephemeral environments for every branch.",   isRecommended: isLargeTeam },
   ],
   auth: [
     { id: "supabase",  label: "Supabase Auth", description: "Built into your stack. Auth + RLS together.",    isRecommended: () => true },
     { id: "clerk",     label: "Clerk",         description: "Managed auth with prebuilt UI components.",     isRecommended: (c) => c.experienceLevel === "beginner" },
     { id: "nextauth",  label: "NextAuth",      description: "Flexible, many OAuth providers, self-hosted." },
-    { id: "auth0",     label: "Auth0",         description: "Enterprise-grade managed auth.",                isRecommended: (c) => c.budget === "funded" && c.teamSize === "large" },
+    { id: "auth0",     label: "Auth0",         description: "Enterprise-grade managed auth.",                isRecommended: (c) => c.budget === "funded" && isLargeTeam(c) },
   ],
   testing: [
     { id: "vitest_playwright", label: "Vitest + Playwright", description: "Modern standard for Next.js projects.", isRecommended: () => true },
@@ -36,7 +38,7 @@ export const CARD_CHOICES: Partial<Record<DomainId, ChoiceOption[]>> = {
   deployment: [
     { id: "vercel",       label: "Vercel",       description: "Zero-config Next.js deployment.", isRecommended: () => true },
     { id: "railway",      label: "Railway",      description: "Simple full-stack hosting." },
-    { id: "aws",          label: "AWS",          description: "Full control, complex setup.",   isRecommended: (c) => c.budget === "funded" && c.teamSize === "large" },
+    { id: "aws",          label: "AWS",          description: "Full control, complex setup.",   isRecommended: (c) => c.budget === "funded" && isLargeTeam(c) },
   ],
 };
 

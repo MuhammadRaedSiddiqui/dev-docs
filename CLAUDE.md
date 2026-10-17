@@ -19,13 +19,14 @@ in product copy.
 
 ```text
 apps/web/
-  app/                         Next.js 14 App Router pages
+  app/                         Next.js 15 App Router pages
   components/                  UI and feature components
   lib/interview/store.ts       Zustand interview state machine
   lib/ai/stream.ts             authenticated SSE client
   lib/trpc.ts                  typed tRPC client
-  e2e/                         deployed/HITL Playwright framework
-  tests/e2e/                   deterministic mocked browser specs
+  e2e/                         shared Playwright framework and live tests
+  e2e/deterministic/           isolated desktop/mobile browser specs
+  tests/e2e/                   superseded legacy mocked specs
 
 apps/api/
   src/hono-app.ts              middleware, tRPC adapter, health, metrics
@@ -49,7 +50,7 @@ Do not duplicate cross-app types. Put them in `@devdocs/shared`.
 
 ### Web
 
-- Next.js 14 App Router and React 18
+- Next.js 15 App Router and React 19
 - Clerk authentication
 - TanStack Query and tRPC React for server data
 - Zustand for the interview state machine
@@ -74,7 +75,7 @@ is `/ai/*`, primarily `POST /ai/stream`.
 ## Core user flow
 
 1. A signed-in user creates a project and chooses its type.
-2. Discovery captures team size, timeline, budget, and experience.
+2. Project setup captures development team size, timeline, project funding, and experience. "Start interview" begins the interview after valid setup; project creation alone makes no AI generation request.
 3. `getActiveDomains(projectType)` selects the relevant interview domains.
 4. The user answers open questions, cards, or the database schema interaction.
 5. AI responses stream as token deltas from the API.
@@ -91,7 +92,7 @@ changing interview behavior.
 - Project type is selected once in the create-project modal.
 - Planning asks for the product elaboration and reuses it in later prompts.
 - Card choices render inline in the conversation.
-- Database uses a suggested schema interaction rather than a cold entity list.
+- Database uses platform cards; the former schema interaction is retired.
 - Internal retries must not appear as user-visible chat messages.
 - Final completion state must be set before any optional closing AI message.
 - `sendMessage` may still be used for post-completion clarification.
@@ -106,8 +107,7 @@ Domain modes:
 | Mode | Domains |
 |---|---|
 | Open | planning, api, frontend |
-| Cards | architecture, environment, auth, testing, monitoring, deployment |
-| Schema | database |
+| Cards | architecture, database, environment, auth, testing, monitoring, deployment |
 
 When adding a domain, update the `DomainId` type and Zod enum, domain metadata,
 opener/template logic, choices when applicable, project-type activation rules,
@@ -130,6 +130,13 @@ interview_messages       per-session message/timing/error telemetry
 write document bodies into `domainContent`. That field remains optional only for
 reading and backfilling old rows. `documentation_bundles` always wins when both
 stores contain a domain.
+
+Discovery keeps the persisted `budget` key as categorical funding context, never
+a numerical infrastructure spending limit. Funding and timeline accept explicit
+`not_sure` values. New setup uses `eleven_plus`, `1_under_3_months`, and
+`3_under_6_months` for unambiguous boundaries. Retain legacy `large` (10+),
+`1_3_months`, and `3_6_months` as original selections; never invent exact counts or
+reinterpret their boundaries. Shared discovery labels are used in UI and prompts.
 
 Project deletion is soft deletion. Account-data deletion removes the local user
 row and relies on foreign-key cascades for all owned data, then directs the user
@@ -176,6 +183,10 @@ encrypted with AES-256-GCM, and never returned. Only masked metadata is listed o
 included in a data export. Never log raw keys, decrypted keys, authorization
 headers, cookies, prompts containing secrets, or encryption material.
 
+Meta Muse uses an explicit low reasoning effort and a shared 4,000-token total
+completion budget: its private reasoning consumes the same budget as visible
+text. Stream usage logging contains token counts and finish metadata only.
+
 All providers use `buildSystemPrompt()` from `@devdocs/shared`. Do not create
 provider-specific prompt copies in the web or API apps.
 
@@ -189,6 +200,10 @@ a committed, reviewable migration.
 pnpm --filter @devdocs/api exec drizzle-kit generate
 pnpm --filter @devdocs/api db:migrate
 ```
+
+`db:migrate` uses Drizzle's runtime migrator with the committed SQL and loads
+`apps/api/.env`. This avoids the installed drizzle-kit/ORM version mismatch.
+It does not invoke the integration setup or truncate tables.
 
 Review generated SQL and metadata before committing. Include compatibility SQL
 when a deployed environment may have been shaped by an older push-based flow.
@@ -233,18 +248,34 @@ API tests are Vitest integration tests backed by PostgreSQL. Router tests should
 use `appRouter.createCaller()` for typed procedures and verify ownership as well
 as happy paths.
 
+`test:unit` uses `vitest.unit.config.ts` for isolated crypto, rate-limit, SSE
+client, and AI route failure tests without database setup. `test:smoke` starts
+the compiled `dist/hono-server.cjs` bundle with unreachable test dependencies
+and checks public health plus unauthenticated application boundaries.
+
 There are two Playwright lanes:
 
 1. `playwright.ci.config.ts` runs deterministic mocked specs from
-   `apps/web/tests/e2e` with one worker and no human pauses.
+   `apps/web/e2e/deterministic` with one worker, desktop/mobile projects, and
+   no human pauses. Its development-only Clerk alias and API simulator require
+   no external service credentials; unknown mock procedures fail explicitly.
 2. `playwright.config.ts` runs the deployed/HITL framework in `apps/web/e2e`.
    The manual GitHub workflow restores a base64-encoded Clerk storage state and
    targets a configured deployed `BASE_URL`.
 
 CI applies migrations before API tests. Do not replace this with schema push.
-The browser CI job requires the `CLERK_PUBLISHABLE_KEY` repository secret. The
-manual deployed job additionally requires `BASE_URL` and
+The deterministic browser CI job needs no secrets. The
+manual deployed job requires `CLERK_PUBLISHABLE_KEY`, `BASE_URL`, and
 `E2E_STORAGE_STATE_BASE64`.
+
+Only generation requests with `persistDocument: true` write canonical documents.
+Chat openers, clarification, and closing replies must never overwrite them.
+Manual document edits save each domain explicitly; preserve Markdown separators
+inside each body. Failed saves retain drafts and expose retry.
+Unsaved document drafts and edit mode live in the interview store so mobile
+sheet closure and viewport changes preserve them. Every export entry point,
+including completion-chat buttons, must block while any document draft exists.
+Drafts are transient and must not be written into the interview snapshot.
 
 ## Operations
 
@@ -287,6 +318,19 @@ hashes.
 - Validate ownership and soft-deletion status on project-scoped operations.
 - Await persistence at externally visible lifecycle boundaries.
 - Keep save retries bounded and report terminal failures to the user.
+- Dashboard rename uses a modal dialog and the shared project update schema;
+  submit only the name. Keep the dialog open while saving and retain failed
+  drafts for retry. Restore focus to the originating project actions trigger.
+- Dashboard deletion requires a confirmation dialog styled like rename, with
+  Cancel focused initially and a destructive Delete project button. Keep the
+  dialog open and block duplicate submissions/dismissal while deleting; expose
+  errors inline for retry. Update cached project/document lists only on success.
+- Dashboard action menus open 8px right of their source card, aligned with the
+  trigger's top. Neighboring-card overlap is allowed. Only viewport constraints
+  permit left/below fallbacks and vertical shifting, with 8px edge clearance.
+- Dashboard downloads allow partial saved bundles from `projects.get.documents`,
+  including empty manual edits and supported legacy domains. Never substitute
+  snapshot bodies, a project description, or an AI request for saved documents.
 - Update migrations, tests, README, and this file when behavior changes.
 - Run typecheck, lint, relevant tests, build, and `git diff --check` in
   proportion to the change.

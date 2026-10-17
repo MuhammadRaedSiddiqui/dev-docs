@@ -51,7 +51,7 @@ export function DocsSidebar({
   ).sort((a, b) => a[1].localeCompare(b[1]));
 
   return (
-    <aside className="w-[260px] flex-shrink-0 border-r border-hairline bg-sidebar-mist flex flex-col py-4 overflow-y-auto">
+    <aside className="hidden md:flex w-[260px] flex-shrink-0 border-r border-hairline bg-sidebar-mist flex-col py-4 overflow-y-auto">
       <div className="px-2 mb-[18px]">
         <Item active={!domainFilter && !projectFilter} onClick={onReset} label="All documents" count={docs.length} />
       </div>

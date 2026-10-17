@@ -1,0 +1,46 @@
+.panel {
+  position: fixed;
+  inset: min(12vh, 96px) 0 auto;
+  width: 600px;
+  max-width: calc(100vw - 32px);
+  max-height: calc(100dvh - min(12vh, 96px) - 24px);
+  margin: 0 auto;
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--radius-lg);
+  background: var(--color-pure-white);
+  color: var(--color-graphite-ink);
+  box-shadow: 0 8px 32px rgb(13 13 13 / 12%);
+}
+.panel[open] { display: flex; flex-direction: column; }
+.panel::backdrop { background: rgb(13 13 13 / 20%); }
+.header { display: flex; align-items: center; gap: var(--spacing-8); padding: 12px; border-bottom: 1px solid var(--color-hairline); }
+.inputFrame { display: flex; flex: 1; align-items: center; gap: var(--spacing-10); min-width: 0; padding: 0 12px; border: 1px solid transparent; border-radius: var(--radius-lg); color: var(--color-mid-ash); }
+.inputFrame:focus-within { border-color: var(--color-mid-ash); background: var(--color-sidebar-mist); box-shadow: 0 0 0 2px var(--color-hover-veil); }
+.inputFrame svg { flex-shrink: 0; }
+.panel .input { min-width: 0; width: 100%; height: 44px; padding: 10px 0; border: 0; background: transparent; color: var(--color-graphite-ink); font-size: 16px; line-height: 24px; }
+/* The surrounding field supplies the visible focus treatment, scoped to search. */
+.panel .input:focus, .panel .input:focus-visible { outline: none; }
+.input::placeholder { color: var(--color-mid-ash); opacity: 1; }
+.close { display: flex; align-items: center; justify-content: center; flex-shrink: 0; min-width: 44px; min-height: 44px; border-radius: var(--radius-lg); color: var(--color-mid-ash); }
+.close:hover { background: var(--color-hover-veil); color: var(--color-graphite-ink); }
+.close kbd { padding: 2px 5px; border: 1px solid var(--color-hairline); border-radius: 4px; font-family: var(--font-mono); font-size: 12px; }
+.body { overflow-y: auto; overscroll-behavior: contain; padding: 8px; }
+.message { padding: 24px 12px; text-align: center; color: var(--color-mid-ash); font-size: var(--text-caption); line-height: var(--leading-body); }
+.emptyTitle { margin-bottom: 4px; color: var(--color-graphite-ink); font-weight: 500; }
+.group { padding-bottom: 8px; }
+.groupLabel { padding: 8px 12px; color: var(--color-mid-ash); font-size: 12px; font-weight: 600; line-height: 18px; }
+.result { display: flex; align-items: flex-start; gap: var(--spacing-12); min-height: 56px; padding: 10px 12px; border-radius: var(--radius-lg); cursor: pointer; }
+.result:hover, .result[aria-selected="true"] { background: var(--color-hover-veil); }
+.resultIcon { flex-shrink: 0; margin-top: 2px; color: var(--color-mid-ash); }
+.resultText { min-width: 0; overflow-wrap: anywhere; }
+.resultName { font-size: var(--text-caption); line-height: var(--leading-body); font-weight: 500; }
+.resultMeta { margin-top: 2px; color: var(--color-mid-ash); font-size: 13px; line-height: var(--leading-body); }
+.loading { display: flex; align-items: center; justify-content: center; gap: var(--spacing-8); padding: 8px 12px; color: var(--color-mid-ash); font-size: var(--text-caption); }
+.spinner { width: 14px; height: 14px; border: 2px solid var(--color-edge-gray); border-top-color: var(--color-mid-ash); border-radius: 50%; animation: search-spin 800ms linear infinite; }
+.error { display: flex; align-items: center; justify-content: space-between; gap: var(--spacing-12); padding: 12px; color: var(--color-mid-ash); font-size: var(--text-caption); }
+.retry { flex-shrink: 0; min-height: 44px; padding: 0 8px; border-radius: var(--radius-lg); color: var(--color-graphite-ink); text-decoration: underline; text-underline-offset: 3px; }
+.retry:disabled { opacity: 0.5; cursor: wait; }
+@keyframes search-spin { to { transform: rotate(360deg); } }
+@media (max-width: 639px) { .header { padding: 8px; gap: 4px; } .inputFrame { padding: 0 8px; gap: 8px; } }

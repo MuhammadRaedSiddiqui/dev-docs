@@ -4,7 +4,7 @@
 // classifyFailure() on teardown when the test failed.
 import { test as base, type Locator } from "@playwright/test";
 import { attachConsoleMonitor } from "./monitoring/consoleMonitor";
-import { attachNetworkMonitor } from "./monitoring/networkMonitor";
+import { attachNetworkMonitor, flushNetworkMonitor } from "./monitoring/networkMonitor";
 import { pauseForHuman } from "./hitl/pauseForHuman";
 import { resilientLocator } from "./resilience/resilientLocator";
 import { classifyFailure } from "./triage/classifyFailure";
@@ -24,6 +24,7 @@ export const test = base.extend<{ hitl: HitlFn; find: FindFn }>({
     attachNetworkMonitor(page, testInfo);
     attachConsoleMonitor(page, testInfo);
     await use(page);
+    await flushNetworkMonitor(page, testInfo);
     if (testInfo.status !== testInfo.expectedStatus) {
       // Guaranteed triage on failure (never opt-in per spec).
       await classifyFailure(testInfo);

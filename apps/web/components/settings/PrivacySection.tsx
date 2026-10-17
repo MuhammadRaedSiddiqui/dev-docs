@@ -1,99 +1,105 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useClerk } from "@clerk/nextjs";
-import { PageHeader, Card } from "@/components/settings/AccountSection";
+import { PageHeader, Card, Field, Feedback, SettingsButton, styles } from "./SettingsUI";
 import { trpc } from "@/lib/trpc";
-import { useToast } from "@/lib/toast";
 
 function downloadJson(data: unknown): string {
-  const date = new Date().toISOString().slice(0, 10);
-  const filename = `devdocs-data-export-${date}.json`;
-  const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
-  const url = URL.createObjectURL(blob);
+  const filename = `devdocs-data-export-${new Date().toISOString().slice(0, 10)}.json`;
+  const url = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: "application/json" }));
   const anchor = document.createElement("a");
   anchor.href = url;
   anchor.download = filename;
   document.body.appendChild(anchor);
-  anchor.click();
-  anchor.remove();
-  URL.revokeObjectURL(url);
+  try { anchor.click(); } finally { anchor.remove(); URL.revokeObjectURL(url); }
   return filename;
 }
 
 export function PrivacySection() {
-  const { toast } = useToast();
   const { openUserProfile } = useClerk();
   const [deleteText, setDeleteText] = useState("");
-  const exportQuery = trpc.account.exportData.useQuery(undefined, {
-    enabled: false,
-    retry: false,
-  });
+  const [exporting, setExporting] = useState(false);
+  const [exportFeedback, setExportFeedback] = useState<{ message: string; error?: boolean } | null>(null);
+  const [dataDeleted, setDataDeleted] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [identityError, setIdentityError] = useState<string | null>(null);
+  const exportLock = useRef(false);
+  const deleteLock = useRef(false);
+  const exportQuery = trpc.account.exportData.useQuery(undefined, { enabled: false, retry: false });
   const deleteData = trpc.account.deleteData.useMutation();
 
   async function exportData() {
-    toast("Preparing your export…");
-    const result = await exportQuery.refetch();
-    if (!result.data) {
-      toast(result.error?.message ?? "Could not prepare your export");
-      return;
-    }
-    const filename = downloadJson(result.data);
-    toast(`Downloaded ${filename}`);
+    if (exportLock.current || dataDeleted || deleteLock.current) return;
+    exportLock.current = true;
+    setExporting(true);
+    setExportFeedback({ message: "Preparing your JSON export…" });
+    try {
+      const result = await exportQuery.refetch();
+      if (result.error) throw result.error;
+      if (!result.data) throw new Error("Could not prepare your export. Please retry.");
+      const filename = downloadJson(result.data);
+      setExportFeedback({ message: `Download started: ${filename}` });
+    } catch (error) {
+      setExportFeedback({ message: error instanceof Error ? error.message : "Could not prepare your export. Please retry.", error: true });
+    } finally { exportLock.current = false; setExporting(false); }
+  }
+
+  async function continueIdentityRemoval() {
+    setIdentityError(null);
+    try { await openUserProfile(); }
+    catch { setIdentityError("Account management could not open. Use Continue to account management to try again."); }
   }
 
   async function deleteAccountData() {
+    if (deleteText !== "DELETE" || deleteLock.current || dataDeleted || exportLock.current) return;
+    deleteLock.current = true;
+    setDeleteError(null);
     try {
       await deleteData.mutateAsync({ confirmation: "DELETE" });
+      setDataDeleted(true);
       setDeleteText("");
-      toast("DevDocs data deleted. Complete identity deletion in account management.");
-      openUserProfile();
     } catch (error) {
-      toast(error instanceof Error ? error.message : "Could not delete your data");
-    }
+      setDeleteError(error instanceof Error ? error.message : "Could not delete your DevDocs data. Please retry.");
+      return;
+    } finally { deleteLock.current = false; }
+    await continueIdentityRemoval();
   }
 
-  return (
-    <div className="max-w-[640px]">
-      <PageHeader title="Privacy & Data" sub="Export or permanently remove your DevDocs data." />
-      <div className="flex gap-2.5 p-3.5 rounded-lg border border-hairline bg-sidebar-mist mb-4">
-        <span className="text-sm flex-shrink-0">◇</span>
-        <div className="text-[12.5px] leading-snug text-ink-secondary">
-          Your export includes account details, projects, documentation, interview sessions, messages, and non-secret API-key connection metadata.
-        </div>
-      </div>
-      <Card title="Export your data" sub="Download a machine-readable JSON copy of your DevDocs data.">
-        <button
-          type="button"
-          onClick={exportData}
-          disabled={exportQuery.isFetching}
-          className="px-4 py-1.5 border border-vellum-border rounded-lg text-xs bg-white text-ink-secondary hover:border-ink hover:text-ink disabled:opacity-50 disabled:cursor-wait"
-        >
-          {exportQuery.isFetching ? "Preparing export…" : "Download all my data"}
-        </button>
-      </Card>
-      <Card title="Delete account" sub="Permanently delete all DevDocs projects and data, then remove your sign-in identity through Clerk." danger>
-        <div className="text-[11px] text-ink-faint mb-2">
-          Type <strong className="text-ink">DELETE</strong> to confirm. This cannot be undone.
-        </div>
-        <div className="flex gap-2 items-center">
-          <input
-            type="text"
-            value={deleteText}
-            onChange={(event) => setDeleteText(event.target.value)}
-            placeholder="DELETE"
-            className="px-3 py-2 border border-hairline rounded-lg text-[13px] w-40"
-          />
-          <button
-            type="button"
-            disabled={deleteText !== "DELETE" || deleteData.isPending}
-            onClick={deleteAccountData}
-            className="px-4 py-2 rounded-lg text-xs font-medium bg-ink text-white disabled:opacity-40 disabled:cursor-not-allowed"
-          >
-            {deleteData.isPending ? "Deleting…" : "Delete data & continue"}
-          </button>
-        </div>
-      </Card>
-    </div>
-  );
+  return <div className={styles.content}>
+    <PageHeader title="Privacy & Data" sub="Download your DevDocs records or begin staged account removal." />
+    <Card title="Export your data" sub="Download a JSON copy of your DevDocs account data.">
+      <p className={styles.note}>Includes account details, projects, documentation, interview sessions and messages, and masked API-key connection metadata. Secret API keys and their encrypted values are excluded.</p>
+      <p className={styles.note}>This is an account-data export. Use a project’s documentation export for its ZIP of Markdown files.</p>
+      <SettingsButton onClick={exportData} disabled={exporting || deleteData.isPending || dataDeleted}>
+        {exporting ? "Preparing export…" : "Download data (.json)"}
+      </SettingsButton>
+      {exportFeedback && <Feedback error={exportFeedback.error}>{exportFeedback.message}</Feedback>}
+    </Card>
+    <Card
+      title={dataDeleted ? "Step 2 of 2 · Remove sign-in identity" : "Step 1 of 2 · Delete DevDocs data"}
+      sub={dataDeleted ? "DevDocs data deletion succeeded. Complete the separate sign-in removal step in account management." : "Account removal has two separate stages. This action deletes DevDocs data; sign-in removal follows in account management."}
+      danger
+    >
+      {dataDeleted ? <>
+        <Feedback>Step 1 complete · DevDocs data deleted. Your sign-in identity has not been removed by this action.</Feedback>
+        <p className={`${styles.muted} mt-3`}>Step 2: use the account deletion option in account management to remove your sign-in identity. Opening account management does not complete that step.</p>
+        <div className="mt-4"><SettingsButton onClick={continueIdentityRemoval}>Continue to account management</SettingsButton></div>
+        {identityError && <Feedback error>{identityError}</Feedback>}
+      </> : <>
+        <p className={styles.note}>This action permanently removes your DevDocs account record, projects, documentation, interview sessions and messages, and saved API keys. It cannot be undone.</p>
+        <p className={styles.note}>Step 2 of 2: remove your sign-in identity separately in account management. It opens after DevDocs data deletion succeeds; you must complete its account deletion flow there.</p>
+        <Field label="Type DELETE to confirm" htmlFor="delete-confirmation">
+          <input id="delete-confirmation" type="text" value={deleteText} onChange={event => setDeleteText(event.target.value)}
+            placeholder="DELETE" autoComplete="off" spellCheck={false} disabled={deleteData.isPending}
+            className={`${styles.input} ${styles.confirmation}`} />
+        </Field>
+        <SettingsButton variant="danger" pending={deleteData.isPending} disabled={deleteText !== "DELETE" || exporting} onClick={deleteAccountData}>
+          {deleteData.isPending ? "Deleting DevDocs data…" : "Delete data & continue"}
+        </SettingsButton>
+        {deleteData.isPending && <Feedback>Step 1 in progress · Deleting DevDocs data. The separate sign-in removal step follows after this succeeds.</Feedback>}
+        {deleteError && <Feedback error>Step 1 could not be completed: {deleteError} Sign-in removal has not started.</Feedback>}
+      </>}
+    </Card>
+  </div>;
 }

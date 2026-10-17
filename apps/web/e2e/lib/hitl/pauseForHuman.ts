@@ -35,6 +35,8 @@ export interface PauseForHumanOptions {
   /** Default 5 minutes. Never Infinity. */
   timeoutMs?: number;
   screenshotOnPause?: boolean;
+  /** Resume after a verifiable human action when worker stdin is not attached. */
+  resumeWhen?: () => Promise<boolean>;
 }
 
 function appendHitlLog(testInfo: TestInfo, event: Record<string, unknown>) {
@@ -104,13 +106,23 @@ export async function pauseForHuman(opts: PauseForHumanOptions): Promise<void> {
   if (!isCI) {
     // 3a. LOCAL — terminal block, block on stdin.
     await notifyTerminal().notify(notification);
+    let stopped = false;
+    const automaticResume = opts.resumeWhen ? (async () => {
+      while (!stopped) {
+        try { if (await opts.resumeWhen!()) return "resume"; } catch {}
+        await new Promise(resolve => setTimeout(resolve, 1000));
+      }
+      return "__timeout__";
+    })() : new Promise<string>(() => {});
     const result = await Promise.race([
       waitForEnter(),
+      automaticResume,
       new Promise<string>((resolve) => {
         const t = setTimeout(() => resolve("__timeout__"), timeoutMs);
         t.unref?.();
       }),
     ]);
+    stopped = true;
     const elapsed = Date.now() - startedAt;
     if (result === "__timeout__") {
       try {

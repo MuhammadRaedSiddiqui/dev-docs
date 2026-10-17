@@ -1,186 +1,56 @@
-// apps/api/src/routes/projects.test.ts
-import { describe, it, expect, beforeEach } from 'vitest';
-import app from '../hono-app';
-import { getAuthHeaders, createTestUser } from '../test/helpers';
+import { beforeEach, describe, expect, it } from 'vitest';
+import { appRouter } from '../trpc/router';
+import { createTestUser } from '../test/helpers';
 import { db, projects } from '../lib/db';
 import { eq } from 'drizzle-orm';
 
-// Thin helpers over Hono's app.request() to keep the assertions readable.
-// Bodies are typed as `any` to match the previous supertest ergonomics.
-async function post(path: string, headers: Record<string, string>, body: unknown): Promise<{ status: number; body: any }> {
-  const res = await app.request(path, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json', ...headers },
-    body: JSON.stringify(body),
-  });
-  return { status: res.status, body: await res.json().catch(() => null) };
-}
-
-async function get(path: string, headers: Record<string, string> = {}): Promise<{ status: number; body: any }> {
-  const res = await app.request(path, { headers });
-  return { status: res.status, body: await res.json().catch(() => null) };
-}
-
-async function del(path: string, headers: Record<string, string> = {}): Promise<{ status: number; body: any }> {
-  const res = await app.request(path, { method: 'DELETE', headers });
-  return { status: res.status, body: await res.json().catch(() => null) };
-}
-
-describe('POST /projects', () => {
-  let authHeaders: Record<string, string>;
-  let userId: string;
-
+describe('projects tRPC ownership, validation and lifecycle', () => {
+  let owner: ReturnType<typeof appRouter.createCaller>;
+  let other: ReturnType<typeof appRouter.createCaller>;
   beforeEach(async () => {
-    const user = await createTestUser(`test-${Date.now()}@example.com`);
-    userId = user.id;
-    authHeaders = await getAuthHeaders(user.id);
+    const a = await createTestUser(`owner-${crypto.randomUUID()}@example.test`);
+    const b = await createTestUser(`other-${crypto.randomUUID()}@example.test`);
+    owner = appRouter.createCaller({ userId: a.id, userEmail: a.email });
+    other = appRouter.createCaller({ userId: b.id, userEmail: b.email });
   });
-
-  it('creates a new project', async () => {
-    const response = await post('/projects', authHeaders, {
-      name: 'Test Project',
-      type: 'saas',
-    });
-
-    expect(response.status).toBe(201);
-    expect(response.body).toHaveProperty('id');
-    expect(response.body.name).toBe('Test Project');
-    expect(response.body.type).toBe('saas');
-    expect(response.body.status).toBe('in_progress');
+  it.each(['saas', 'api', 'internal_tool', 'mobile', 'landing_page', 'other'] as const)('creates and retrieves %s projects', async type => {
+    const created = await owner.projects.create({ name: 'New project', type });
+    expect(created.status).toBe('in_progress');
+    expect((await owner.projects.get({ id: created.id })).name).toBe('New project');
+    expect(await other.projects.list()).toEqual([]);
   });
-
-  it('validates required fields', async () => {
-    const response = await post('/projects', authHeaders, {
-      name: '', // Invalid: empty name
-      type: 'saas',
-    });
-
-    expect(response.status).toBe(400);
-    expect(response.body.error).toBe('validation_error');
+  it('renames projects and persists interview snapshots', async () => {
+    const created = await owner.projects.create({ name: 'Original', type: 'saas' });
+    await owner.projects.update({ id: created.id, data: { name: 'Renamed', interviewData: { completedDomains: ['planning'] } } });
+    const result = await owner.projects.get({ id: created.id });
+    expect(result.name).toBe('Renamed'); expect(result.domainsCompleted).toBe(1);
   });
-
+  it('denies get, update, delete and document access across owners', async () => {
+    const p = await owner.projects.create({ name: 'Private', type: 'saas' });
+    await expect(other.projects.get({ id: p.id })).rejects.toMatchObject({ code: 'NOT_FOUND' });
+    await expect(other.projects.update({ id: p.id, data: { name: 'Stolen' } })).rejects.toMatchObject({ code: 'NOT_FOUND' });
+    await expect(other.projects.delete({ id: p.id })).rejects.toMatchObject({ code: 'NOT_FOUND' });
+    await expect(other.documents.listByProject({ projectId: p.id })).rejects.toMatchObject({ code: 'NOT_FOUND' });
+  });
+  it('soft deletes and denies subsequent reads and writes', async () => {
+    const p = await owner.projects.create({ name: 'Delete me', type: 'saas' });
+    await owner.projects.delete({ id: p.id });
+    expect(await owner.projects.list()).toEqual([]);
+    const [row] = await db.select().from(projects).where(eq(projects.id, p.id));
+    expect(row.deletedAt).not.toBeNull();
+    await expect(owner.projects.get({ id: p.id })).rejects.toMatchObject({ code: 'NOT_FOUND' });
+    await expect(owner.projects.update({ id: p.id, data: { name: 'Resurrected' } })).rejects.toMatchObject({ code: 'NOT_FOUND' });
+    await expect(owner.documents.update({ projectId: p.id, domainId: 'planning', content: 'deleted' })).rejects.toMatchObject({ code: 'NOT_FOUND' });
+  });
+  it('rejects invalid UUIDs, empty mutations and oversized names', async () => {
+    await expect(owner.projects.get({ id: 'invalid' })).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+    await expect(owner.projects.create({ name: '', type: 'saas' })).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+    await expect(owner.projects.create({ name: 'x'.repeat(101), type: 'saas' })).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+    await expect(owner.projects.update({ id: crypto.randomUUID(), data: {} })).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+  });
   it('requires authentication', async () => {
-    const response = await post('/projects', {}, {
-      name: 'Test Project',
-      type: 'saas',
-    });
-
-    expect(response.status).toBe(401);
-  });
-});
-
-describe('GET /projects', () => {
-  let authHeaders: Record<string, string>;
-  let userId: string;
-
-  beforeEach(async () => {
-    const user = await createTestUser(`test-${Date.now()}@example.com`);
-    userId = user.id;
-    authHeaders = await getAuthHeaders(user.id);
-  });
-
-  it('returns user projects only', async () => {
-    // Create a project for this user
-    await post('/projects', authHeaders, { name: 'User 1 Project', type: 'saas' });
-
-    // Create another user and their project
-    const user2 = await createTestUser(`test2-${Date.now()}@example.com`);
-    const headers2 = await getAuthHeaders(user2.id);
-    await post('/projects', headers2, { name: 'User 2 Project', type: 'api' });
-
-    // User 1 should only see their project
-    const response = await get('/projects', authHeaders);
-
-    expect(response.status).toBe(200);
-    expect(Array.isArray(response.body)).toBe(true);
-    expect(response.body.length).toBe(1);
-    expect(response.body[0].name).toBe('User 1 Project');
-  });
-
-  it('requires authentication', async () => {
-    const response = await get('/projects');
-    expect(response.status).toBe(401);
-  });
-});
-
-describe('GET /projects/:id', () => {
-  let authHeaders: Record<string, string>;
-  let userId: string;
-  let projectId: string;
-
-  beforeEach(async () => {
-    const user = await createTestUser(`test-${Date.now()}@example.com`);
-    userId = user.id;
-    authHeaders = await getAuthHeaders(user.id);
-
-    // Create a test project
-    const createResponse = await post('/projects', authHeaders, {
-      name: 'Test Project',
-      type: 'saas',
-    });
-
-    projectId = createResponse.body.id;
-  });
-
-  it('returns a single project', async () => {
-    const response = await get(`/projects/${projectId}`, authHeaders);
-
-    expect(response.status).toBe(200);
-    expect(response.body.id).toBe(projectId);
-    expect(response.body.name).toBe('Test Project');
-  });
-
-  it('returns 404 for non-existent project', async () => {
-    const response = await get('/projects/00000000-0000-0000-0000-000000000000', authHeaders);
-
-    expect(response.status).toBe(404);
-  });
-
-  it('prevents access to other users projects', async () => {
-    const user2 = await createTestUser(`test2-${Date.now()}@example.com`);
-    const headers2 = await getAuthHeaders(user2.id);
-
-    const response = await get(`/projects/${projectId}`, headers2);
-
-    expect(response.status).toBe(404);
-  });
-});
-
-describe('DELETE /projects/:id', () => {
-  let authHeaders: Record<string, string>;
-  let userId: string;
-  let projectId: string;
-
-  beforeEach(async () => {
-    const user = await createTestUser(`test-${Date.now()}@example.com`);
-    userId = user.id;
-    authHeaders = await getAuthHeaders(user.id);
-
-    const createResponse = await post('/projects', authHeaders, {
-      name: 'Test Project',
-      type: 'saas',
-    });
-
-    projectId = createResponse.body.id;
-  });
-
-  it('soft deletes a project', async () => {
-    const response = await del(`/projects/${projectId}`, authHeaders);
-
-    expect(response.status).toBe(200);
-    expect(response.body.success).toBe(true);
-
-    // Verify project is soft deleted
-    const project = await db.query.projects.findFirst({
-      where: eq(projects.id, projectId),
-    });
-
-    expect(project?.deletedAt).not.toBeNull();
-  });
-
-  it('returns 404 for non-existent project', async () => {
-    const response = await del('/projects/00000000-0000-0000-0000-000000000000', authHeaders);
-
-    expect(response.status).toBe(404);
+    const anonymous = appRouter.createCaller({ userId: null, userEmail: null });
+    await expect(anonymous.projects.list()).rejects.toMatchObject({ code: 'UNAUTHORIZED' });
+    await expect(anonymous.projects.create({ name: 'No auth', type: 'saas' })).rejects.toMatchObject({ code: 'UNAUTHORIZED' });
   });
 });

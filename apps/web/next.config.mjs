@@ -1,6 +1,23 @@
 // next.config.mjs
 
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
 const nextConfig = {
+  // Keep the development toolbar from covering mobile controls in UI tests.
+  ...(process.env.PLAYWRIGHT === '1' ? { devIndicators: false } : {}),
+  outputFileTracingRoot: path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..'),
+  webpack(config, { dev }) {
+    // The deterministic lane changes module resolution. Include that mode in
+    // Webpack's persistent cache key before reusing .next for real Clerk.
+    if (config.cache && typeof config.cache === 'object') {
+      config.cache.version = `${config.cache.version ?? ''}|clerk:${dev && process.env.PLAYWRIGHT === '1' ? 'mock' : 'real'}`;
+    }
+    if (dev && process.env.PLAYWRIGHT === '1') {
+      config.resolve.alias['@clerk/nextjs$'] = path.resolve('e2e/lib/mocks/clerk.tsx');
+    }
+    return config;
+  },
   // Allow cross-origin requests from the API server in development
   async headers() {
     return [
@@ -25,13 +42,6 @@ const nextConfig = {
         destination: `${process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000"}/:path*`,
       },
     ];
-  },
-  // Suppress the "missing suspense boundary" warning during dev — all dynamic
-  // pages in this project use client-side data fetching, not server-side rendering
-  experimental: {
-    // Enable the Turbopack bundler for faster local dev builds
-    // Remove this line if you're on Next.js < 14.2
-    turbo: {},
   },
 };
 

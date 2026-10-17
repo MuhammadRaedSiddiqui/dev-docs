@@ -1,6 +1,5 @@
 // app/page.tsx
 // Public-facing marketing landing page.
-// Faithful port of landing.html — same structure, same copy, same visual output.
 // "use client" is needed only for the FAQ accordion toggle. Everything else
 // could be server-rendered; feel free to extract the FAQ into its own client
 // component and make the rest of this file a Server Component.
@@ -56,24 +55,25 @@ export default function LandingPage() {
   return (
     <div className={s.root}>
       {/* Mobile notice */}
-      <div className="sm:hidden px-4 py-2.5 text-center text-[12px] text-white" style={{ background: "var(--terracotta)" }}>
+      <div className={s.mobileNotice}>
         DevDocs AI is best experienced on a larger screen.
       </div>
       {/* NAV */}
-      <nav className={s.nav}>
+      <nav className={s.nav} aria-label="Main navigation">
         <span className={s.navLogo}>DevDocs AI</span>
         <ul className={s.navLinks}>
           <li><a href="#how">How It Works</a></li>
           <li><a href="#output">Output</a></li>
-          <li><a href="#pricing">Pricing</a></li>
+          <li><a href="#pricing">Pricing & Billing</a></li>
           <li><a href="#faq">FAQ</a></li>
         </ul>
         <div className={s.navActions}>
           <Link href="/sign-in" className={s.btnGhost}>Sign In</Link>
-          <Link href="/sign-in" className={s.btnPrimary}>Get Started</Link>
+          <Link href="/sign-in" className={s.btnPrimary}>Get Started Free</Link>
         </div>
       </nav>
 
+      <main>
       {/* HERO */}
       <section className={s.hero}>
         <div className={s.container}>
@@ -81,34 +81,42 @@ export default function LandingPage() {
             <div>
               <p className={s.sectionLabel}>Pre-build planning</p>
               <h1 className={s.displayType}>
-                Your project,<br />fully planned before<br />you write line one.
+                Your project, fully planned before you write line one.
               </h1>
               <p className={s.heroSub}>
                 Interview with AI. Generate a project-specific documentation bundle. Feed it to Claude Code,
                 Cursor, or Windsurf. Build without guessing.
               </p>
               <div className={s.heroCtas}>
-                <Link href="/sign-in" className={s.btnPrimaryLg}>Get Started Free</Link>
-                <a href="#how" className={s.btnGhostLg}>See How It Works</a>
+                <Link href="/sign-in" className={s.btnPrimary}>Get Started Free</Link>
+                <a href="#how" className={s.btnGhost}>See How It Works</a>
               </div>
-              <p className={s.heroNote}>Free with your own Anthropic API key. No subscription required.</p>
+              <p className={s.heroNote}>Free app access; your AI provider charges for usage.</p>
             </div>
 
-            <div className={s.fileTree}>
-              <p className={s.fileTreeHeader}>Output bundle</p>
-              <div className={s.fileDir}>docs/</div>
-              <div style={{ paddingLeft: 16 }}>
-                {OUTPUT_FILES.map((f) => (
-                  <div key={f.name} className={s.fileItem}>
-                    {f.name}<span className={s.fileExt}>.md</span>
-                  </div>
-                ))}
-                <div className={s.fileItem} style={{ color: "#73726c", marginTop: 8 }}>
-                  README<span className={s.fileExt}>.md</span>{" "}
-                  <span style={{ color: "#5f5e5d", fontSize: 11 }}>← start here</span>
-                </div>
-              </div>
-            </div>
+            {/* Illustrative content, not a captured customer interview. */}
+            <figure className={s.productExample}>
+              <figcaption className={s.exampleHeader}>
+                <span className={s.exampleLabel}>Example output</span>
+                <span>Project: personal document workspace</span>
+              </figcaption>
+              <ol className={s.exampleSteps}>
+                <li>
+                  <p className={s.exampleLabel}>1. Discovery question</p>
+                  <p>Who can access a project’s documents?</p>
+                </li>
+                <li>
+                  <p className={s.exampleLabel}>2. Your answer → planning decision</p>
+                  <p>“Just the project owner. No sharing in the MVP.”</p>
+                  <p className={s.exampleDecision}><strong>Decision:</strong> Require sign-in and check project ownership before every document request.</p>
+                </li>
+                <li>
+                  <p className={s.exampleLabel}>3. Generated documentation</p>
+                  <p className={s.exampleFilename}>docs/AUTH.md</p>
+                  <pre className={s.exampleMarkdown}><code>{`## Document access\n\n- Only the signed-in project owner can\n  read or edit project documents.\n- Verify ownership on every request.\n- Sharing is out of scope for the MVP.`}</code></pre>
+                </li>
+              </ol>
+            </figure>
           </div>
         </div>
       </section>
@@ -129,7 +137,7 @@ export default function LandingPage() {
             </p>
           </div>
           <div className={s.beforeAfter}>
-            <div className={`${s.baCard} ${s.baCardBad}`}>
+            <div className={s.baCard}>
               <p className={s.baCardLabel}>✕ &nbsp;Without DevDocs AI</p>
               <div className={s.codeSnippet}>
                 Build me a SaaS app with user auth,<br />a dashboard, and Stripe payments.
@@ -147,7 +155,7 @@ export default function LandingPage() {
                 ))}
               </ul>
             </div>
-            <div className={`${s.baCard} ${s.baCardGood}`}>
+            <div className={s.baCard}>
               <p className={s.baCardLabel}>✓ &nbsp;With DevDocs AI</p>
               <div className={s.codeSnippet}>
                 docs/README.md → 10 files loaded<br />Full architectural context present.
@@ -201,7 +209,7 @@ export default function LandingPage() {
             ].map((step) => (
               <div key={step.n} className={s.stepCell}>
                 <p className={s.stepNumber}>{step.n}</p>
-                <h4 className={s.stepCellH4}>{step.title}</h4>
+                <h3 className={s.cardHeading}>{step.title}</h3>
                 <p>{step.body}</p>
               </div>
             ))}
@@ -234,88 +242,32 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* BYOK */}
-      <section className={s.sectionByok} id="byok">
-        <div className={s.container}>
-          <div className={s.byokIntro}>
-            <p className={s.sectionLabel}>How billing works</p>
-            <h2 className={s.heading}>Bring your own key.<br />Pay nothing to us. Build everything.</h2>
-          </div>
-          <div className={s.byokCols}>
-            {[
-              {
-                price: "$0 / free",
-                title: "Free with BYOK",
-                body: "You supply a supported provider key. It is sent over HTTPS, verified, encrypted at rest, and used only by our server for your AI requests. Provider usage charges vary by model and interview length.",
-              },
-              {
-                price: "Roadmap",
-                title: "Hosted AI",
-                body: "Hosted model access, versioning, and additional export formats are ideas under consideration. Pricing and availability have not been announced.",
-              },
-              {
-                price: "Roadmap",
-                title: "Team workspaces",
-                body: "Shared projects and administrative controls are ideas under consideration. They are not currently available for purchase.",
-              },
-            ].map((col) => (
-              <div key={col.title} className={s.byokCol}>
-                <p className={s.byokPrice}>{col.price}</p>
-                <h4 className={s.byokColH4}>{col.title}</h4>
-                <p>{col.body}</p>
-              </div>
-            ))}
-          </div>
-          <p className={s.byokNote}>
-            Available today: supported documentation domains, project templates, in-app editing, and ZIP export using your own provider key.
-          </p>
-        </div>
-      </section>
-
-      <hr className={s.divider} />
-
-      {/* PRICING */}
+      {/* PRICING & BILLING */}
       <section className={s.sectionPricing} id="pricing">
         <div className={s.container}>
           <div className={s.pricingIntro}>
-            <p className={s.sectionLabel}>Pricing</p>
-            <h2 className={s.heading}>Free BYOK access today.</h2>
+            <p className={s.sectionLabel}>Pricing & Billing</p>
+            <h2 className={s.heading}>Free app. Your AI provider key.</h2>
           </div>
-          <div className={s.pricingGrid}>
-            <div className={s.pricingCard}>
-              <p className={s.pricingTier}>Free</p>
+          <div className={s.pricingCard}>
+            <div className={s.pricingDetails}>
+              <h3 className={s.cardHeading}>Free with bring your own key (BYOK)</h3>
               <p className={s.pricingPrice}>$0</p>
-              <p className={s.pricingPriceNote}>current access</p>
-              <p className={s.pricingDesc}>Use your own supported AI-provider key. Your provider charges you directly for model usage.</p>
-              <ul className={s.pricingFeatures}>
-                {["No configured project quota", "Supported documentation domains", "Project templates", "In-app editing", "ZIP export", "BYOK"].map((f) => <li key={f}>{f}</li>)}
-              </ul>
-              <Link href="/sign-in" className={s.btnGhostLg}>Get Started Free</Link>
+              <p className={s.pricingPriceNote}>DevDocs AI app access. No subscription required.</p>
+              <p className={s.pricingDesc}>Connect an API key from a supported AI provider to power your planning interview. An API key lets DevDocs AI use that provider’s models on your behalf.</p>
+              <p className={s.billingNote}><strong>AI usage is separate.</strong> Your provider may charge you directly for usage. Costs vary by model and interview length.</p>
+              <Link href="/sign-in" className={s.btnPrimary}>Get Started Free</Link>
             </div>
-
-            <div className={s.pricingCard}>
-              <span className={s.featuredBadge}>Roadmap</span>
-              <p className={s.pricingTier}>Hosted AI</p>
-              <p className={s.pricingPrice}>TBD</p>
-              <p className={s.pricingPriceNote}>not yet available</p>
-              <p className={s.pricingDesc}>Potential hosted model access without supplying a provider key.</p>
+            <div className={s.pricingIncluded}>
+              <h3 className={s.cardHeading}>Included today</h3>
               <ul className={s.pricingFeatures}>
-                {["Hosted model access", "Project versioning", "Additional export formats"].map((f) => <li key={f}>{f}</li>)}
+                {["AI-guided planning across the domains relevant to your project", "Project templates to start your interview", "Editable Markdown documentation in the app", "Markdown and ZIP export for your coding workflow"].map((f) => <li key={f}>{f}</li>)}
               </ul>
-              <span className={s.btnGhostLg}>Not available</span>
-            </div>
-
-            <div className={s.pricingCard}>
-              <p className={s.pricingTier}>Team roadmap</p>
-              <p className={s.pricingPrice}>TBD</p>
-              <p className={s.pricingPriceNote}>not yet available</p>
-              <p className={s.pricingDesc}>Potential collaboration and administrative capabilities.</p>
-              <ul className={s.pricingFeatures}>
-                {["Shared projects", "Workspace roles", "Administrative controls"].map((f) => <li key={f}>{f}</li>)}
-              </ul>
-              <span className={s.btnGhostLg}>Not available</span>
             </div>
           </div>
+          <aside className={s.roadmapNote} aria-label="Roadmap">
+            <strong>On the roadmap:</strong> Hosted AI and team workspaces are under consideration and are not currently available. Availability and pricing are not announced.
+          </aside>
         </div>
       </section>
 
@@ -329,13 +281,11 @@ export default function LandingPage() {
           <div className={s.faqList}>
             {FAQS.map((faq, i) => (
               <div key={i} className={s.faqItem}>
-                <button type="button" className={s.faqQuestion} onClick={() => toggleFaq(i)}>
+                <button type="button" className={s.faqQuestion} id={`faq-question-${i}`} aria-expanded={openFaq === i} aria-controls={`faq-answer-${i}`} onClick={() => toggleFaq(i)}>
                   {faq.q}
-                  <span className={`${s.faqArrow} ${openFaq === i ? s.faqArrowOpen : ""}`}>↓</span>
+                  <span aria-hidden="true" className={`${s.faqArrow} ${openFaq === i ? s.faqArrowOpen : ""}`}>↓</span>
                 </button>
-                {openFaq === i && (
-                  <div className={s.faqAnswer}>{faq.a}</div>
-                )}
+                <div className={s.faqAnswer} id={`faq-answer-${i}`} role="region" aria-labelledby={`faq-question-${i}`} hidden={openFaq !== i}>{faq.a}</div>
               </div>
             ))}
           </div>
@@ -346,18 +296,18 @@ export default function LandingPage() {
       <section className={s.sectionCta}>
         <div className={s.container}>
           <div className={s.ctaInner}>
-            <h2 className={`${s.displayType} ${s.ctaDisplay}`} style={{ color: "#ffffff", fontSize: 48 }}>
+            <h2 className={s.heading}>
               Stop discovering architecture decisions mid-build.
             </h2>
             <p className={s.ctaSub}>Plan completely. Build confidently. Ship without rework.</p>
             <div className={s.ctaButtons}>
-              <Link href="/sign-in" className={s.ctaBtnPrimary}>Get Started Free</Link>
-              <a href="#output" className={s.ctaBtnGhost}>See the Output</a>
+              <Link href="/sign-in" className={s.btnPrimary}>Get Started Free</Link>
+              <a href="#output" className={s.btnGhost}>See the Output</a>
             </div>
-            <p className={s.ctaNote}>Free with your Anthropic API key. No credit card required.</p>
           </div>
         </div>
       </section>
+      </main>
 
       {/* FOOTER */}
       <footer className={s.footer}>
@@ -369,14 +319,9 @@ export default function LandingPage() {
             </div>
             <ul className={s.footerLinks}>
               <li><a href="#how">How It Works</a></li>
-              <li><a href="#pricing">Pricing</a></li>
-              <li><a href="#">Documentation</a></li>
-              <li><a href="#">Privacy Policy</a></li>
-              <li><a href="#">Terms of Service</a></li>
-            </ul>
-            <ul className={s.footerLinks}>
-              <li><a href="#">GitHub</a></li>
-              <li><a href="#">Twitter / X</a></li>
+              <li><a href="#pricing">Pricing & Billing</a></li>
+              <li><a href="#output">Documentation</a></li>
+              <li><a href="#faq">FAQ</a></li>
             </ul>
           </div>
         </div>

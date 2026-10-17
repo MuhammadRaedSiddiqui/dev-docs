@@ -1,38 +1,65 @@
 "use client";
-import { useState } from "react";
+
+import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Navbar } from "@/components/layout/Navbar";
+import { TemplateDialog } from "@/components/templates/TemplateDialog";
+import { discoveryDefaults, interviewDefaults, templateMetadata } from "@/components/templates/template-details";
+import s from "@/components/templates/templates.module.css";
 import { TEMPLATES, type Template } from "@/lib/templates";
-import { PROJECT_TYPE_LABELS } from "@/lib/types";
-import { PROJECT_TYPE_BADGE_CLASS } from "@/lib/types";
+import { PROJECT_TYPE_LABELS, type ProjectContext } from "@/lib/types";
 import { trpc } from "@/lib/trpc";
-import { cn } from "@/lib/utils";
+import { useToast } from "@/lib/toast";
 
 export default function TemplatesPage() {
   const router = useRouter();
+  const { toast } = useToast();
+  const [preview, setPreview] = useState<Template | null>(null);
   const [selected, setSelected] = useState<Template | null>(null);
   const [name, setName] = useState("");
+  const [context, setContext] = useState<ProjectContext | null>(null);
+  const [choices, setChoices] = useState<Template["lockedChoices"]>({});
   const [creating, setCreating] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [pendingProjectId, setPendingProjectId] = useState<string | null>(null);
+  const returnFocus = useRef<HTMLButtonElement | null>(null);
+  const submitting = useRef(false);
   const createProject = trpc.projects.create.useMutation();
   const updateProject = trpc.projects.update.useMutation();
 
   function handleUse(template: Template) {
+    if (submitting.current) return;
+    setPreview(null);
+    setPendingProjectId(null);
     setSelected(template);
     setName("");
+    setContext({ ...template.lockedContext });
+    setChoices(Object.fromEntries(Object.entries(template.lockedChoices).map(([domain, fields]) => [domain, { ...fields }])));
+    setError(null);
+  }
+
+  function closeDialog() {
+    if (submitting.current) return;
+    setPreview(null);
+    setSelected(null);
   }
 
   async function handleCreate() {
-    if (!selected || !name.trim() || creating) return;
+    if (!selected || !context || !name.trim() || submitting.current) return;
+    submitting.current = true;
     setCreating(true);
+    setError(null);
     try {
-      const project = await createProject.mutateAsync({ name: name.trim(), type: selected.projectType });
+      const project = pendingProjectId ? { id: pendingProjectId } : await createProject.mutateAsync({ name: name.trim(), type: selected.projectType });
+      setPendingProjectId(project.id);
       await updateProject.mutateAsync({
         id: project.id,
         data: {
+          name: name.trim(),
           interviewData: {
-            lockedContext: selected.lockedContext,
-            lockedChoices: selected.lockedChoices,
+            lockedContext: context,
+            lockedChoices: choices,
             completedDomains: [],
             conversationHistory: [],
             elaboration: selected.elaboration,
@@ -41,108 +68,103 @@ export default function TemplatesPage() {
       });
       setSelected(null);
       router.push(`/project/${project.id}/interview`);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Could not create project. Please try again.";
+      setError(message);
+      toast(message, "error");
     } finally {
+      submitting.current = false;
       setCreating(false);
     }
   }
 
+  const active = preview ?? selected;
+
   return (
-    <div className="flex flex-col h-screen overflow-hidden">
+    <div className={s.page}>
       <Navbar active="templates" />
-      <div className="flex flex-1 overflow-hidden">
-        {/* Sidebar */}
-        <aside className="w-[260px] flex-shrink-0 border-r border-hairline bg-sidebar-mist flex flex-col py-4 overflow-y-auto hidden md:flex">
-          <div className="px-4 mb-5">
-            <Link
-              href="/dashboard"
-              className="w-full py-2 px-2.5 bg-white border border-hairline rounded-lg text-[14px] font-medium flex items-center gap-2 text-ink-secondary hover:bg-hover-veil transition-colors"
-            >
-              ← Back to projects
-            </Link>
-          </div>
-          <div className="px-5">
-            <div className="text-[10px] font-medium uppercase tracking-wider text-ink-faint mb-2">About templates</div>
-            <p className="text-[12px] text-ink-muted leading-relaxed">
-              Templates pre-fill your choices so the interview focuses on what matters for your project type.
-            </p>
-          </div>
-        </aside>
-
-        {/* Main content */}
-        <main className="flex-1 overflow-y-auto px-8 py-7">
-          <div className="mb-6">
-            <h1 className="font-serif-heading text-2xl text-ink mb-1">Templates</h1>
-            <p className="text-[13px] text-ink-muted">Start from a proven foundation. Pick a template and customize it during the interview.</p>
-          </div>
-
-          <div className="grid grid-cols-[repeat(auto-fill,minmax(280px,1fr))] gap-4">
-            {TEMPLATES.map(t => (
-              <div key={t.id} className="border border-hairline rounded-lg bg-white p-4 flex flex-col">
-                <div className="flex items-center gap-2 mb-2">
-                  <span className="text-[10px] px-1.5 py-0.5 rounded-none font-medium bg-sidebar-mist text-ink">
-                    {PROJECT_TYPE_LABELS[t.projectType]}
-                  </span>
+      <main className={s.main}>
+        <div className={s.content}>
+          <Link href="/dashboard" className={s.back}><span aria-hidden="true">←</span> Back to projects</Link>
+          <header className={s.header}>
+            <h1 className={s.heading}>Templates</h1>
+            <p className={s.description}>Choose a starting point, then customize your project.</p>
+          </header>
+          <div className={s.grid}>
+            {TEMPLATES.map(template => (
+              <article key={template.id} className={s.card} aria-labelledby={`template-${template.id}`}>
+                <span className={s.badge}>{PROJECT_TYPE_LABELS[template.projectType]}</span>
+                <h2 id={`template-${template.id}`} className={s.title}>{template.name}</h2>
+                <p className={s.description}>{template.description}</p>
+                <dl className={s.metadata}>
+                  {templateMetadata(template).map(row => <div key={row.label}><dt>{row.label}</dt><dd>{row.value}</dd></div>)}
+                </dl>
+                <div className={s.cardActions}>
+                  <button type="button" className={s.button} aria-haspopup="dialog" onClick={event => { returnFocus.current = event.currentTarget; handleUse(template); }}>Start with template</button>
+                  <button type="button" className={s.textButton} aria-haspopup="dialog" onClick={event => { returnFocus.current = event.currentTarget; setPreview(template); }}>View details</button>
+                  <p className={s.helper}>Opens project setup with editable defaults.</p>
                 </div>
-                <h3 className="font-serif-heading text-[15px] text-ink mb-1.5">{t.name}</h3>
-                <p className="text-[12px] text-ink-muted leading-relaxed mb-4 flex-1">{t.description}</p>
-                <button
-                  type="button"
-                  onClick={() => handleUse(t)}
-                  className="w-full py-2 px-3 bg-ink text-white rounded-lg text-[14px] font-medium hover:bg-ink-press transition-colors"
-                >
-                  Use this template →
-                </button>
-              </div>
+              </article>
             ))}
           </div>
-        </main>
-      </div>
-
-      {/* Name modal */}
-      {selected && (
-        <div
-          className="fixed inset-0 bg-ink/40 flex items-center justify-center z-50"
-          onClick={e => { if (e.target === e.currentTarget) setSelected(null); }}
-        >
-          <div className="bg-white border border-hairline rounded-lg w-[420px] overflow-hidden">
-            <div className="px-6 pt-5 pb-4 border-b border-vellum-border">
-              <h3 className="font-serif-heading text-lg text-ink">Name your project</h3>
-              <p className="text-[13px] text-ink-muted mt-1">
-                Using template: <strong className="text-ink">{selected.name}</strong>
-              </p>
-            </div>
-            <div className="px-6 py-5">
-              <label htmlFor="tmpl-name" className="block text-[13px] font-medium text-ink mb-1.5">Project name</label>
-              <input
-                id="tmpl-name"
-                type="text"
-                value={name}
-                onChange={e => setName(e.target.value)}
-                onKeyDown={e => e.key === "Enter" && handleCreate()}
-                placeholder="e.g. My SaaS App"
-                autoFocus
-                className="w-full px-3 py-2.5 border border-ink/15 rounded-vellum text-[13px] bg-white text-ink focus:outline-none focus:border-ink/30"
-              />
-            </div>
-            <div className="px-6 py-3.5 border-t border-vellum-border flex gap-2 justify-end bg-white">
-              <button
-                type="button"
-                onClick={() => setSelected(null)}
-                className="px-4 py-2 border border-vellum-border rounded-lg text-[13px] bg-white text-ink-secondary"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                disabled={!name.trim() || creating}
-                onClick={handleCreate}
-                className="px-5 py-2 bg-ink text-vellum rounded-lg text-[13px] font-medium disabled:opacity-35 disabled:cursor-not-allowed"
-              >
-                {creating ? "Creating..." : "Start planning →"}
-              </button>
-            </div>
-          </div>
         </div>
+      </main>
+
+      {active && returnFocus.current && (
+        <TemplateDialog title={preview ? preview.name : "Name your project"} description={preview ? preview.description : `Using template: ${selected!.name}`}
+          returnFocus={returnFocus.current} setup={!!selected} onClose={closeDialog}
+          actions={preview ? <>
+            <p className={s.helper}>Opens project setup with editable defaults.</p>
+            <button type="button" className={s.primary} onClick={() => handleUse(preview)}>Start with template</button>
+            <button type="button" className={s.button} onClick={closeDialog}>Close</button>
+          </> : <>
+            <button type="submit" form="template-setup" disabled={!name.trim() || creating} className={s.primary}>{creating ? "Creating..." : "Start planning →"}</button>
+            <button type="button" disabled={creating} className={s.button} onClick={closeDialog}>Cancel</button>
+          </>}>
+          {preview ? <>
+            <section className={s.section}>
+              <h3>Project defaults</h3>
+              <dl className={s.detailRows}><div><dt>Project type</dt><dd>{PROJECT_TYPE_LABELS[preview.projectType]}</dd></div></dl>
+            </section>
+            {discoveryDefaults(preview.lockedContext).length > 0 && <section className={s.section}>
+              <h3>Discovery defaults</h3>
+              <p className={s.helper}>The timeline is a prefilled planning preference, not a delivery estimate.</p>
+              <dl className={s.detailRows}>{discoveryDefaults(preview.lockedContext).map(field => <div key={field.key}><dt>{field.label}</dt><dd>{field.displayValue}</dd></div>)}</dl>
+            </section>}
+            {interviewDefaults(preview.lockedChoices).length > 0 && <section className={s.section}>
+              <h3>Interview &amp; technology defaults</h3>
+              <dl className={s.detailRows}>{interviewDefaults(preview.lockedChoices).map(choice => <div key={`${choice.domain}-${choice.key}`}><dt>{choice.label}</dt><dd>{choice.displayValue}</dd></div>)}</dl>
+            </section>}
+            {preview.elaboration && <section className={s.section}><h3>Project description default</h3><p className={s.description}>{preview.elaboration}</p></section>}
+            <p className={s.note}>These are prefilled planning choices, not implemented features or code. You can edit the discovery and technology defaults in project setup before you start planning. Viewing these details does not create a project.</p>
+          </> : context && <form id="template-setup" aria-busy={creating} onSubmit={event => { event.preventDefault(); void handleCreate(); }}>
+            <label className={s.field}>Project name
+              <input type="text" value={name} disabled={creating} onChange={event => setName(event.target.value)} placeholder="e.g. My SaaS App" autoComplete="off" />
+            </label>
+            <p className={s.helper}>Name your project, optionally edit its defaults, then start planning.</p>
+            <details className={s.customize}>
+              <summary>Customize defaults</summary>
+              <section className={s.section}>
+                <h3>Discovery defaults</h3>
+                {discoveryDefaults(context).map(field => <label key={field.key} className={s.field}>{field.label}
+                  <select value={field.value} disabled={creating} onChange={event => setContext({ ...context, [field.key]: event.target.value })}>
+                    {field.options.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
+                  </select>
+                </label>)}
+              </section>
+              {interviewDefaults(choices).length > 0 && <section className={s.section}>
+                <h3>Interview &amp; technology defaults</h3>
+                {interviewDefaults(choices).map(choice => <label key={`${choice.domain}-${choice.key}`} className={s.field}>{choice.label}
+                  <select value={choice.value} disabled={creating} onChange={event => setChoices(current => ({ ...current, [choice.domain]: { ...current[choice.domain], [choice.key]: event.target.value } }))}>
+                    {!choice.options.some(option => option.id === choice.value) && <option value={choice.value}>{choice.displayValue}</option>}
+                    {choice.options.map(option => <option key={option.id} value={option.id}>{option.label}</option>)}
+                  </select>
+                </label>)}
+              </section>}
+            </details>
+            {error && <p role="alert" className={s.error}>{error}</p>}
+          </form>}
+        </TemplateDialog>
       )}
     </div>
   );

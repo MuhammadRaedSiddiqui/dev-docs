@@ -7,6 +7,7 @@ import {
   attachNetworkMonitor,
   getContractViolations,
   getFailedRequests,
+  flushNetworkMonitor,
 } from "../lib/monitoring/networkMonitor";
 import { DashboardPage } from "../lib/pages/DashboardPage";
 
@@ -19,8 +20,14 @@ test("smoke: dashboard loads with no errors", async ({ page, find }, testInfo) =
   ]);
 
   const dashboard = new DashboardPage(page, testInfo);
+  const projectListResponse = page.waitForResponse(response =>
+    new URL(response.url()).pathname.split('/').at(-1)?.split(',').includes('projects.list') === true,
+  );
   // Compose via Page Object methods — never inline raw locators here.
   await dashboard.gotoDashboard();
+  const response = await projectListResponse;
+  expect(response.ok(), 'Authenticated projects.list must reach the real API successfully').toBe(true);
+  await response.finished();
 
   // Key element via find() (resilientLocator with fallbacks).
   const heading = await find({
@@ -31,6 +38,7 @@ test("smoke: dashboard loads with no errors", async ({ page, find }, testInfo) =
   await expect(heading.first()).toBeVisible({ timeout: 15000 });
 
   // Monitor assertions: console clean, no failed requests, no contract breaks.
+  await flushNetworkMonitor(page, testInfo);
   expect(getConsoleErrors(page)).toEqual([]);
   expect(getFailedRequests(page)).toEqual([]);
   expect(getContractViolations(page)).toEqual([]);

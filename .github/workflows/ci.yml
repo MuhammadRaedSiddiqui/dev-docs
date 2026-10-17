@@ -109,6 +109,9 @@ jobs:
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/devdocs_test
           NODE_ENV: test
 
+      - name: Run isolated API and streaming tests
+        run: pnpm --filter @devdocs/api test:unit
+
   test-e2e:
     name: E2E Tests
     runs-on: ubuntu-latest
@@ -133,27 +136,21 @@ jobs:
       - name: Install Playwright browser
         run: pnpm --filter @devdocs/web exec playwright install --with-deps chromium
 
-      - name: Verify Clerk test configuration
-        env:
-          NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: ${{ secrets.CLERK_PUBLISHABLE_KEY }}
-        run: test -n "$NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY"
-
       - name: Run deterministic E2E tests
         run: pnpm --filter @devdocs/web test:e2e
         env:
           CI: "true"
           NEXT_PUBLIC_API_URL: http://localhost:4000
           NEXT_PUBLIC_APP_URL: http://localhost:3000
-          NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: ${{ secrets.CLERK_PUBLISHABLE_KEY }}
-          NEXT_PUBLIC_CLERK_JS_VERSION: 6.25.5
-          NEXT_PUBLIC_CLERK_UI_VERSION: 1.25.5
 
       - name: Upload Playwright report
         uses: actions/upload-artifact@v4
         if: always()
         with:
           name: playwright-report
-          path: apps/web/playwright-report/
+          path: |
+            apps/web/playwright-report/
+            apps/web/test-results/
           retention-days: 30
 
   build:
@@ -164,7 +161,7 @@ jobs:
       # Dummy values so builds don't fail on missing env vars
       NEXT_PUBLIC_API_URL: http://localhost:4000
       NEXT_PUBLIC_APP_URL: http://localhost:3000
-      NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: pk_test_dummy_key_for_ci_build
+      NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: pk_test_ZXhhbXBsZS5jbGVyay5hY2NvdW50cy5kZXYk
       DATABASE_URL: postgresql://postgres:postgres@localhost:5432/devdocs_ci
       ENCRYPTION_KEY: 0000000000000000000000000000000000000000000000000000000000000000
     steps:
@@ -188,5 +185,11 @@ jobs:
       - name: Build apps/api
         run: pnpm --filter @devdocs/api build
 
+      - name: Smoke test compiled API
+        run: pnpm --filter @devdocs/api test:smoke
+
       - name: Build apps/web
         run: pnpm --filter @devdocs/web build
+
+      - name: Check production web authentication boundaries
+        run: pnpm --filter @devdocs/web test:smoke

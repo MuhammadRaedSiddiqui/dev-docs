@@ -1,0 +1,89 @@
+/* Scoped to dashboard components; the approved landing page is unaffected. */
+.primaryAction {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--spacing-8);
+  width: 100%;
+  min-height: 48px;
+  padding: 12px 16px;
+  border: 1px solid var(--color-graphite-ink);
+  border-radius: var(--radius-lg);
+  background: var(--color-graphite-ink);
+  color: var(--color-pure-white);
+  font-size: var(--text-caption);
+  line-height: var(--leading-body);
+  font-weight: 600;
+  text-decoration: none;
+  transition: background-color 150ms ease, border-color 150ms ease;
+}
+.primaryAction:hover { background: var(--color-mid-ash); border-color: var(--color-mid-ash); }
+.primaryAction:active { background: var(--color-ink-press); border-color: var(--color-ink-press); }
+.primaryAction:disabled { background: var(--color-sidebar-mist); border-color: var(--color-hairline); color: var(--color-mid-ash); cursor: wait; }
+.primaryAction:focus-visible, .card a:focus-visible, .card button:focus-visible { outline: 2px solid var(--color-graphite-ink); outline-offset: 3px; }
+.card { position: relative; display: flex; flex-direction: column; gap: 16px; padding: 20px; border: 1px solid var(--color-hairline); border-radius: var(--radius-lg); background: var(--color-pure-white); min-width: 0; }
+.projectGrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 280px), 1fr)); align-items: stretch; gap: 16px; }
+.cardHeader { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
+.cardName { min-width: 0; flex: 1; }
+.projectType { color: var(--color-mid-ash); font-size: var(--text-caption); margin-bottom: 8px; }
+.cardName .projectType { margin-bottom: 6px; }
+.title { display: inline-block; font-size: 20px; line-height: 1.35; font-weight: 600; color: var(--color-graphite-ink); text-decoration: none; overflow-wrap: anywhere; }
+.title:hover { color: var(--color-mid-ash); }
+.title:active { color: var(--color-ink-press); }
+.status { align-self: flex-start; padding: 4px 8px; border-radius: 6px; background: var(--color-sidebar-mist); color: var(--color-graphite-ink); font-size: var(--text-caption); font-weight: 500; }
+.metadata { display: flex; flex-direction: column; gap: 12px; font-size: var(--text-caption); line-height: var(--leading-body); color: var(--color-mid-ash); }
+.metadata dt { color: var(--color-graphite-ink); font-weight: 500; }
+.actions { margin-top: auto; display: flex; flex-direction: column; gap: 8px; }
+.secondaryRow { display: flex; align-items: center; min-height: 44px; color: var(--color-mid-ash); font-size: var(--text-caption); line-height: var(--leading-body); }
+.textLink { display: inline-flex; align-items: center; min-height: 44px; color: var(--color-mid-ash); font-size: var(--text-caption); text-decoration: underline; text-underline-offset: 4px; }
+.textLink:hover { color: var(--color-graphite-ink); }
+.textLink:active { background: var(--color-hover-veil); }
+.menuTrigger { display: flex; align-items: center; justify-content: center; width: 44px; height: 44px; border: 0; border-radius: var(--radius-lg); background: transparent; color: var(--color-graphite-ink); flex-shrink: 0; }
+.menuTrigger:hover, .menuTrigger[aria-expanded="true"] { background: var(--color-hover-veil); }
+.menuTrigger:active, .menuItem:active { background: var(--color-edge-gray); }
+.menu { position: fixed; z-index: 100; width: 240px; max-width: calc(100vw - 16px); border: 1px solid var(--color-hairline); border-radius: var(--radius-lg); background: var(--color-pure-white); box-shadow: 0 4px 16px rgb(13 13 13 / 12%); }
+.menuContents { position: relative; z-index: 1; padding: 4px; max-height: inherit; overflow-y: auto; border-radius: inherit; background: inherit; }
+.menuArrow { position: absolute; width: 10px; height: 10px; border: 1px solid var(--color-hairline); background: var(--color-pure-white); transform: translate(-50%, -50%) rotate(45deg); pointer-events: none; }
+.menu[data-placement="right"] .menuArrow { left: -1px; }
+.menu[data-placement="left"] .menuArrow { left: 100%; }
+.menuItem { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 44px; padding: 8px 12px; border: 0; border-radius: 6px; background: transparent; text-align: left; font-size: var(--text-caption); line-height: var(--leading-body); color: var(--color-graphite-ink); }
+.menuItem svg { flex-shrink: 0; }
+.menuItem:not(:disabled):hover, .menuItem:not(:disabled):focus { background: var(--color-sidebar-mist); }
+.menuItem:focus-visible { outline: none; text-decoration: underline; text-underline-offset: 3px; }
+.menuItem:disabled { color: var(--color-mid-ash); cursor: not-allowed; }
+.menuDivider { height: 1px; margin: 4px 8px; background: var(--color-hairline); }
+.destructiveItem { color: var(--danger); }
+.retry { align-self: flex-start; min-height: 44px; font-size: var(--text-caption); color: var(--color-graphite-ink); text-decoration: underline; text-underline-offset: 4px; }
+.sortGroup { display: inline-flex; padding: 4px; border: 1px solid var(--color-hairline); border-radius: var(--radius-lg); background: var(--color-sidebar-mist); }
+.sortOption { min-height: 44px; padding: 8px 12px; border: 0; border-radius: 6px; color: var(--color-mid-ash); font-size: var(--text-caption); text-transform: capitalize; }
+.sortOption:hover { color: var(--color-graphite-ink); background: var(--color-hover-veil); }
+.sortOption[aria-pressed="true"] { background: var(--color-hover-veil); color: var(--color-graphite-ink); font-weight: 600; }
+.sortOption:focus-visible { outline: 2px solid var(--color-graphite-ink); outline-offset: 2px; }
+.sortOption:active { background: var(--color-edge-gray); }
+.statGrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.statCard { display: flex; flex-direction: column; gap: 4px; padding: 12px; border: 1px solid var(--color-hairline); border-radius: var(--radius-lg); background: var(--color-pure-white); min-width: 0; }
+.statCard dt { color: var(--color-mid-ash); font-size: var(--text-caption); line-height: var(--leading-body); }
+.statCard dd { order: -1; color: var(--color-graphite-ink); font-size: 20px; font-weight: 600; line-height: 1.2; }
+@media (min-width: 1024px) { .statGrid { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+
+.downloadStatus { color: var(--color-mid-ash); font-size: var(--text-caption); overflow-wrap: anywhere; }
+.downloadStatus .retry { display: block; }
+.renameDialog { position: fixed; inset: 0; margin: auto; width: 400px; max-width: calc(100vw - 32px); max-height: calc(100dvh - 32px); overflow-y: auto; padding: 24px; border: 1px solid var(--color-hairline); border-radius: var(--radius-lg); background: var(--color-pure-white); color: var(--color-graphite-ink); }
+.renameDialog::backdrop { background: color-mix(in srgb, var(--color-deep-charcoal) 60%, transparent); }
+.projectModalBackdrop { background: color-mix(in srgb, var(--color-deep-charcoal) 40%, transparent); }
+.dialogTitle { font-size: 20px; font-weight: 600; line-height: 1.35; }
+.dialogDescription { margin: 8px 0 20px; color: var(--color-mid-ash); font-size: var(--text-caption); }
+.dialogLabel { display: block; margin-bottom: 8px; font-size: var(--text-caption); font-weight: 500; }
+.dialogInput { width: 100%; min-height: 44px; padding: 10px 12px; border: 1px solid var(--color-hairline); border-radius: var(--radius-lg); background: var(--color-pure-white); color: var(--color-graphite-ink); }
+.dialogError { margin-top: 8px; color: var(--danger); font-size: var(--text-caption); }
+.dialogActions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 24px; }
+.dialogActions .primaryAction { width: auto; min-height: 44px; }
+.dialogActions .primaryAction:disabled { cursor: not-allowed; }
+.renameDialog [aria-busy="true"] .primaryAction:disabled { cursor: wait; }
+.cancelButton { min-height: 44px; padding: 10px 16px; border: 1px solid var(--color-hairline); border-radius: var(--radius-lg); color: var(--color-graphite-ink); font-size: var(--text-caption); font-weight: 500; }
+.cancelButton:hover { background: var(--color-sidebar-mist); }
+.cancelButton:disabled { color: var(--color-mid-ash); cursor: wait; }
+.deleteProjectName { color: var(--color-graphite-ink); overflow-wrap: anywhere; }
+.deleteAction { background: var(--danger); border-color: var(--danger); }
+.deleteAction:hover:not(:disabled), .deleteAction:active:not(:disabled) { background: color-mix(in srgb, var(--danger) 85%, var(--color-ink-press)); border-color: color-mix(in srgb, var(--danger) 85%, var(--color-ink-press)); }
+.deleteAction:focus-visible { outline-color: var(--danger); }

@@ -15,6 +15,7 @@ export class BasePage {
     primary: string,
     description: string,
     fallbacks: string[] = [],
+    timeoutMs?: number,
   ): Promise<Locator> {
     return resilientLocator({
       page: this.page,
@@ -22,6 +23,7 @@ export class BasePage {
       primary,
       fallbacks,
       description,
+      timeoutMs,
     });
   }
 

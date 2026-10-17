@@ -1,17 +1,24 @@
-import type { AIProviderConfig } from '@/lib/ai/provider';
-import type { DomainId, ProjectContext } from '@/lib/types';
+import type { AIProviderConfig } from './provider';
+import type { DomainId, ProjectContext } from '../types';
+import { MAX_HISTORY_MESSAGE_CHARS, StreamEventSchema, type InterviewTurn } from '@devdocs/shared';
 
-export type StreamErrorType = 'auth' | 'rate_limit' | 'timeout' | 'network' | 'persistence' | 'unknown';
-export interface StreamCallbacks { onToken: (text: string) => void; onDone: (text: string) => void; onError: (type: StreamErrorType, message: string) => void; }
+export type StreamErrorType = 'auth' | 'rate_limit' | 'timeout' | 'network' | 'persistence' | 'model_unavailable' | 'unknown';
+export interface StreamCallbacks {
+  onToken: (text: string) => void;
+  onDone: (text: string, result?: InterviewTurn) => void;
+  onError: (type: StreamErrorType, message: string, generatedDocument?: string) => void;
+  onStatus?: (status: 'generating' | 'saving') => void;
+}
 export interface InterviewSnapshot {
   lockedContext: ProjectContext;
   lockedChoices: Partial<Record<DomainId, Record<string, string>>>;
   elaboration: string;
+  confirmedAnswers?: { domainId: DomainId; answer: string }[];
 }
 
 export async function streamAIResponse(
   userMessage: string,
-  config: AIProviderConfig & { domainId: DomainId },
+  config: AIProviderConfig & { domainId: DomainId; persistDocument?: boolean; responseMode?: 'interview'; followUpCount?: number },
   interview: InterviewSnapshot,
   callbacks: StreamCallbacks,
   signal?: AbortSignal,
@@ -26,8 +33,11 @@ export async function streamAIResponse(
         domainId: config.domainId,
         userMessage,
         provider: config.provider,
+        persistDocument: config.persistDocument ?? false,
+        responseMode: config.responseMode,
+        followUpCount: config.followUpCount,
         interview,
-        history: history?.slice(-6),
+        history: history?.slice(-12).map(message => ({ ...message, content: message.content.slice(0, MAX_HISTORY_MESSAGE_CHARS) })),
       }),
     });
     if (!response.ok || !response.body) {
@@ -46,31 +56,43 @@ export async function streamAIResponse(
     let buffer = '';
     let accumulated = '';
     let terminal = false;
-    while (true) {
-      const { value, done } = await reader.read();
-      if (done) {
-        buffer += decoder.decode();
-        break;
-      }
-      buffer += decoder.decode(value, { stream: true });
-      const events = buffer.split('\n\n'); buffer = events.pop() ?? '';
-      for (const event of events) {
-        if (terminal) continue;
-        const line = event.split('\n').find(x => x.startsWith('data: ')); if (!line) continue;
-        const data = JSON.parse(line.slice(6)) as { type: string; text?: string; errorType?: StreamErrorType; message?: string };
+    let ended = false;
+    const consume = (event: string) => {
+        if (terminal) return;
+        const lines = event.split(/\r?\n/).filter(x => x.startsWith('data:'));
+        if (!lines.length) return;
+        const data = StreamEventSchema.parse(JSON.parse(lines.map(line => line.slice(5).trimStart()).join('\n')));
         if (data.type === 'token' && data.text) {
           accumulated += data.text;
           callbacks.onToken(accumulated);
         }
         if (data.type === 'done') {
           terminal = true;
-          callbacks.onDone(data.text ?? accumulated);
+          if (data.result) callbacks.onDone(data.text, data.result);
+          else callbacks.onDone(data.text);
         }
+        if (data.type === 'status') callbacks.onStatus?.(data.status);
         if (data.type === 'error') {
           terminal = true;
-          callbacks.onError(data.errorType ?? 'unknown', data.message ?? 'AI generation failed.');
+          const known = ['auth', 'rate_limit', 'timeout', 'network', 'persistence', 'model_unavailable', 'unknown'];
+          const type = known.includes(data.errorType) ? data.errorType as StreamErrorType : 'unknown';
+          if (data.generatedDocument !== undefined) callbacks.onError(type, data.message, data.generatedDocument);
+          else callbacks.onError(type, data.message);
         }
+    };
+    try {
+      // The API closes immediately after its terminal event. Drain that close
+      // instead of cancelling a successful fetch and reporting ERR_ABORTED.
+      while (true) {
+        const { value, done } = await reader.read();
+        buffer += done ? decoder.decode() : decoder.decode(value, { stream: true });
+        const events = buffer.split(/\r?\n\r?\n/); buffer = events.pop() ?? '';
+        for (const event of events) consume(event);
+        if (done) { ended = true; if (buffer.trim()) consume(buffer); break; }
       }
+    } finally {
+      if (!ended) await reader.cancel().catch(() => undefined);
+      reader.releaseLock();
     }
     if (!terminal) {
       callbacks.onError('network', 'The AI connection closed before generation completed. Please retry.');

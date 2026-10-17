@@ -55,3 +55,20 @@ export async function buildProjectZip(
 
   return zip.generateAsync({ type: "blob" });
 }
+
+/** Export exactly the saved records, including partial bundles, empty manual
+ * edits and supported legacy domains outside the project's current type. */
+export async function buildSavedDocumentationZip(
+  documents: readonly { domainId: string; content: string }[],
+): Promise<Blob> {
+  const saved = DOMAINS.flatMap(domain => {
+    const document = documents.find(record => record.domainId === domain.id);
+    return document ? [{ file: domain.file, content: document.content }] : [];
+  });
+  if (saved.length === 0) throw new Error("No saved documentation to download.");
+  const zip = new JSZip();
+  const docsFolder = zip.folder("docs")!;
+  for (const document of saved) docsFolder.file(document.file, document.content);
+  docsFolder.file("README.md", buildReadme(saved.map(document => document.file)));
+  return zip.generateAsync({ type: "blob" });
+}

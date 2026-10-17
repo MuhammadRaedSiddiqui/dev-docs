@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useRef, type ReactNode } from "react";
+import { useEffect, useRef, useId, type ReactNode } from "react";
 
 interface Props {
   open: boolean;
@@ -11,8 +11,10 @@ interface Props {
 export function BottomSheet({ open, onClose, title, children }: Props) {
   const sheetRef = useRef<HTMLDivElement>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
+  const titleId = useId();
   useEffect(() => {
     if (!open) return;
+    const previousFocus = document.activeElement as HTMLElement | null;
     function handleKey(e: KeyboardEvent) {
       if (e.key === "Escape") onClose();
       if (e.key === "Tab" && sheetRef.current) {
@@ -28,8 +30,10 @@ export function BottomSheet({ open, onClose, title, children }: Props) {
     closeRef.current?.focus();
     const prevOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
-    return () => { document.removeEventListener("keydown", handleKey); document.body.style.overflow = prevOverflow; };
+    return () => { document.removeEventListener("keydown", handleKey); document.body.style.overflow = prevOverflow; previousFocus?.focus(); };
   }, [open, onClose]);
+
+  if (!open) return null;
 
   return (
     <>
@@ -44,7 +48,7 @@ export function BottomSheet({ open, onClose, title, children }: Props) {
         ref={sheetRef}
         role="dialog"
         aria-modal="true"
-        aria-labelledby="bottomsheet-title"
+        aria-labelledby={titleId}
         className={`fixed bottom-0 left-0 right-0 bg-white border-t border-hairline rounded-t-lg z-40 max-h-[75vh] overflow-y-auto transition-transform duration-200 ease-out ${open ? "translate-y-0" : "translate-y-full"}`}
       >
         {/* Drag handle */}
@@ -53,7 +57,7 @@ export function BottomSheet({ open, onClose, title, children }: Props) {
         </div>
         {/* Header */}
         <div className="px-5 pb-3 flex items-center justify-between">
-          <span id="bottomsheet-title" className="font-serif-heading text-[15px] text-ink">{title}</span>
+          <span id={titleId} className="font-serif-heading text-[15px] text-ink">{title}</span>
           <button
             ref={closeRef}
             type="button"

@@ -12,7 +12,7 @@ export function DocList({docs,search,sort,selectedId,onSearch,onSort,onSelect}:L
   else if(sort==="project") list.sort((a,b)=>a.project.localeCompare(b.project)||a.order-b.order);
   else list.sort((a,b)=>a.domainLabel.localeCompare(b.domainLabel));
   return (
-    <div className="w-[360px] flex-shrink-0 border-r border-vellum-border flex flex-col overflow-hidden min-h-0">
+    <div className="w-full md:w-[360px] flex-shrink-0 border-r border-vellum-border flex flex-col overflow-hidden min-h-0">
       <div className="px-4 pt-3.5 pb-2.5 border-b border-vellum-border-light flex-shrink-0">
         <input type="text" value={search} onChange={e=>onSearch(e.target.value)} placeholder="Search documents..." className="w-full px-3 py-2 border border-ink/15 rounded-lg text-[13px] bg-vellum text-ink mb-2 focus:outline-none focus:border-ink/30 focus:bg-white"/>
         <div className="flex items-center justify-between">

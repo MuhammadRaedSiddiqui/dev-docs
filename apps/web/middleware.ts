@@ -14,14 +14,19 @@ const isPublicRoute = createRouteMatcher([
   '/sso-callback(.*)',
 ]);
 
-export default clerkMiddleware(async (auth, request) => {
-  // Allow Playwright E2E to bypass auth via header
-  if (request.headers.get('x-playwright') === '1' || process.env.PLAYWRIGHT === '1') return;
+const authenticatedMiddleware = clerkMiddleware(async (auth, request) => {
   // Protect all routes except public ones
   if (!isPublicRoute(request)) {
     await auth.protect();
   }
 });
+
+// Only a locally started development test server may bypass Clerk. Request
+// headers can never enable this, and production always verifies authentication.
+export default function middleware(...args: Parameters<typeof authenticatedMiddleware>) {
+  if (process.env.NODE_ENV === 'development' && process.env.PLAYWRIGHT === '1') return;
+  return authenticatedMiddleware(...args);
+}
 
 export const config = {
   matcher: [

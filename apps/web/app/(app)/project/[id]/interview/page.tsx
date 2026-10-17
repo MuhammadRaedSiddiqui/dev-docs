@@ -1,308 +1,137 @@
-"use client";
+﻿"use client";
+import { useEffect, useRef, useState } from 'react';
+import Link from 'next/link';
+import { useParams } from 'next/navigation';
+import { useAuth } from '@clerk/nextjs';
+import { DiscoveryForm } from '@/components/interview/DiscoveryForm';
+import { ProjectPlan } from '@/components/interview/ProjectPlan';
+import { QuestionPanel } from '@/components/interview/QuestionPanel';
+import { DocumentationPanel } from '@/components/interview/DocumentationPanel';
+import { InterviewSkeleton } from '@/components/interview/InterviewSkeleton';
+import styles from '@/components/interview/interview.module.css';
+import { useInterviewStore, interviewSnapshot } from '@/lib/interview/store';
+import { setAISession, PROVIDER_MODELS, ACTIVE_PROVIDER_KEY } from '@/lib/ai/provider';
+import { trpc } from '@/lib/trpc';
+import type { DomainId, ProjectType } from '@/lib/types';
+import { readSavedInterviewData } from '@/lib/interview/snapshot';
+import { analytics } from '@/lib/analytics';
 
-import { useCallback, useEffect, useRef, useState } from "react";
-import { DiscoveryForm } from "@/components/interview/DiscoveryForm";
-import { DomainProgress } from "@/components/interview/DomainProgress";
-import { ChatPanel } from "@/components/interview/ChatPanel";
-import { PreviewPanel } from "@/components/interview/PreviewPanel";
-import { BottomSheet } from "@/components/ui/BottomSheet";
-import { InterviewSkeleton } from "@/components/interview/InterviewSkeleton";
-import { useInterviewStore } from "@/lib/interview/store";
-import { getActiveConfig } from "@/lib/ai/provider";
-import { setAISession } from "@/lib/ai/provider";
-import type { AIProvider } from "@/lib/ai/provider";
-import { trpc } from "@/lib/trpc";
-import type { ChatMessage, DomainId, ProjectContext, ProjectType } from "@/lib/types";
-import { useAuth } from "@clerk/nextjs";
-import { useToast } from "@/lib/toast";
-import { analytics } from "@/lib/analytics";
-
-const PROVIDER_LABELS: Record<AIProvider, string> = {
-  anthropic: "Anthropic",
-  openai: "OpenAI",
-  bedrock: "Bedrock",
-  metamuse: "Meta Muse",
-};
-
-type SavedInterviewData = {
-  lockedContext?: ProjectContext | null;
-  lockedChoices?: Partial<Record<DomainId, Record<string, string>>>;
-  completedDomains?: DomainId[];
-  domainContent?: Partial<Record<DomainId, string>>;
-  conversationHistory?: ChatMessage[];
-  elaboration?: string;
-};
-
-function readSavedInterviewData(value: unknown): SavedInterviewData | null {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
-  return value as SavedInterviewData;
-}
-
-export default function InterviewPage({ params }: { params: { id: string } }) {
+export default function InterviewPage() {
+  const params = useParams<{ id: string }>();
   const store = useInterviewStore();
   const { getToken } = useAuth();
-  const { toast } = useToast();
   const [hydrated, setHydrated] = useState(false);
   const hasHydrated = useRef(false);
-  const [domainsSheet, setDomainsSheet] = useState(false);
-  const [previewSheet, setPreviewSheet] = useState(false);
-  const projectQuery = trpc.projects.get.useQuery({ id: params.id });
-  const saveInterview = trpc.projects.update.useMutation();
-  const queuedSave = useRef<Parameters<typeof saveInterview.mutateAsync>[0] | null>(null);
-  const saveInFlight = useRef(false);
-  const retryTimer = useRef<number | null>(null);
-  const saveRetryCount = useRef(0);
-  const activeProjectId = useRef(params.id);
-  const saveInterviewAsync = saveInterview.mutateAsync;
-
-  const flushQueuedSave = useCallback(async () => {
-    if (saveInFlight.current || !queuedSave.current) return;
-
-    if (retryTimer.current) {
-      window.clearTimeout(retryTimer.current);
-      retryTimer.current = null;
-    }
-
-    const nextSave = queuedSave.current;
-    queuedSave.current = null;
-    saveInFlight.current = true;
-    let succeeded = false;
-    try {
-      await saveInterviewAsync(nextSave);
-      succeeded = true;
-      saveRetryCount.current = 0;
-    } catch {
-      // Preserve the latest snapshot and retry even if the user makes no
-      // further state changes. Never requeue a save for a project left behind.
-      if (activeProjectId.current === nextSave.id) {
-        if (!queuedSave.current) queuedSave.current = nextSave;
-        saveRetryCount.current += 1;
-        if (saveRetryCount.current <= 5) {
-          const delay = Math.min(1_000 * 2 ** (saveRetryCount.current - 1), 8_000);
-          retryTimer.current = window.setTimeout(() => {
-            retryTimer.current = null;
-            void flushQueuedSave();
-          }, delay);
-        } else {
-          toast("Interview changes could not be saved. Check your connection and try again.", "error");
-        }
-      }
-    } finally {
-      saveInFlight.current = false;
-    }
-
-    if (succeeded && queuedSave.current) {
-      void flushQueuedSave();
-    }
-  }, [saveInterviewAsync, toast]);
-
-  const pct = Math.round(store.completedDomains.length / store.activeDomains.length * 100);
-
+  const [documentationOpen, setDocumentationOpen] = useState(false);
+  const [section, setSection] = useState<DomainId | null>(null);
+  const [saveError, setSaveError] = useState(false);
+  const toggle = useRef<HTMLButtonElement>(null);
+  const projectQuery = trpc.projects.get.useQuery({ id: params.id }, { staleTime: 0, refetchOnMount: 'always' });
+  const [bedrockModel, setBedrockModel] = useState<string | null>(null);
+  const snapshotKey = JSON.stringify(interviewSnapshot(store));
+  const operationBusy = store.isThinking || store.isStreaming;
+  const saveImmediately = !!store.notice || !!store.pending || store.isComplete || store.followUpCount > 0;
+  useEffect(() => { if (!operationBusy) useInterviewStore.getState().refreshProvider(); }, [operationBusy]);
   useEffect(() => {
-    activeProjectId.current = params.id;
-    queuedSave.current = null;
-    saveRetryCount.current = 0;
-    if (retryTimer.current) {
-      window.clearTimeout(retryTimer.current);
-      retryTimer.current = null;
-    }
-    hasHydrated.current = false;
-    setHydrated(false);
+    const refresh = () => useInterviewStore.getState().refreshProvider();
+    const changed = (event: StorageEvent) => { if (event.key === ACTIVE_PROVIDER_KEY || event.key === null) refresh(); };
+    window.addEventListener('focus', refresh);
+    window.addEventListener('storage', changed);
+    return () => { window.removeEventListener('focus', refresh); window.removeEventListener('storage', changed); };
+  }, []);
+  useEffect(() => {
+    let active = true;
+    void fetch(`${process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000'}/ai/bedrock-status`).then(r => r.json()).then(data => { if (active) setBedrockModel(data.configured ? data.model : null); }).catch(() => {});
+    return () => { active = false; };
+  }, []);
+  useEffect(() => {
+    hasHydrated.current = false; setHydrated(false); setDocumentationOpen(false);
     useInterviewStore.getState().reset();
-    return () => {
-      if (retryTimer.current) window.clearTimeout(retryTimer.current);
-    };
+    return () => { const s = useInterviewStore.getState(); s.abortController?.abort(); };
   }, [params.id]);
-
   useEffect(() => {
-    if (!projectQuery.data || hasHydrated.current) return;
-
+    if (!projectQuery.data || projectQuery.isFetching || hasHydrated.current) return;
+    const s = useInterviewStore.getState();
     const saved = readSavedInterviewData(projectQuery.data.interviewData);
-    const canonicalContent = Object.fromEntries(
-      (projectQuery.data.documents ?? []).map(document => [document.domainId, document.content]),
-    ) as Partial<Record<DomainId, string>>;
-    const restoredContent = { ...(saved?.domainContent ?? {}), ...canonicalContent };
-
-    // Set up token getter and project ID immediately
-    store.setProjectId(params.id);
-    store.setTokenGetter(getToken);
-    store.setProjectName(projectQuery.data.name);
+    const canonical = Object.fromEntries((projectQuery.data.documents ?? []).map(d => [d.domainId, d.content])) as Partial<Record<DomainId, string>>;
+    s.setProjectId(params.id); s.setTokenGetter(getToken); s.setProjectName(projectQuery.data.name);
     setAISession(params.id, getToken);
-    const config = getActiveConfig();
-    if (config) store.setProvider(config.provider);
-
-    if (saved?.lockedContext) {
-      const hasProgress = (saved.conversationHistory ?? []).length > 0
-        || (saved.completedDomains ?? []).length > 0
-        || Object.keys(restoredContent).length > 0;
-      if (hasProgress) {
-        store.resumeFromSaved({
-          lockedContext: saved.lockedContext,
-          lockedChoices: saved.lockedChoices ?? {},
-          completedDomains: saved.completedDomains ?? [],
-          domainContent: restoredContent,
-          conversationHistory: saved.conversationHistory ?? [],
-          elaboration: saved.elaboration ?? "",
-        });
-        const s = useInterviewStore.getState();
-        if (!s.isComplete) {
-          // Restore card picker if hydration stripped it (refresh mid-cards)
-          s.replayOpenerForCurrentDomain();
-          void s.initializeSession(getToken);
-        }
-      } else {
-        store.resumeFromSaved({
-          lockedContext: saved.lockedContext,
-          lockedChoices: saved.lockedChoices ?? {},
-          completedDomains: [],
-          domainContent: {},
-          conversationHistory: [],
-          elaboration: saved.elaboration ?? "",
-        });
-        store.setLockedContext(saved.lockedContext);
-      }
+    s.refreshProvider();
+    if (saved) {
+      s.resumeFromSaved({ ...saved, domainContent: canonical });
+      if (!useInterviewStore.getState().isComplete) void s.initializeSession(getToken);
     }
-
-    hasHydrated.current = true;
-    setHydrated(true);
-  }, [projectQuery.data, params.id, getToken, store]);
-
+    hasHydrated.current = true; setHydrated(true);
+  }, [projectQuery.data, projectQuery.isFetching, params.id, getToken]);
+  // Serialized saves share the engine's checkpoint queue. A stale autosave
+  // cannot overtake a submitted answer or a later completion.
   useEffect(() => {
-    if (!hydrated || !store.lockedContext) return;
-
-    const timeout = window.setTimeout(() => {
-      queuedSave.current = {
-        id: params.id,
-        data: {
-          status: store.isComplete ? "complete" : "in_progress",
-          interviewData: {
-            lockedContext: store.lockedContext,
-            lockedChoices: store.lockedChoices,
-            completedDomains: store.completedDomains,
-            conversationHistory: store.messages,
-            elaboration: store.elaboration,
-          },
-        },
-      };
-      if (!saveInFlight.current) saveRetryCount.current = 0;
-      void flushQueuedSave();
-    }, store.isComplete ? 0 : 500);
-
-    return () => window.clearTimeout(timeout);
-  }, [
-    hydrated,
-    params.id,
-    store.lockedContext,
-    store.lockedChoices,
-    store.completedDomains,
-    store.messages,
-    store.elaboration,
-    store.isComplete,
-    flushQueuedSave,
-  ]);
-
-  // Observability: interview abandoned
+    // The engine checkpoints an in-flight operation itself. Do not queue the
+    // same snapshot again for each streaming/saving status update.
+    if (!hydrated || !store.lockedContext || operationBusy) return;
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout>;
+    let attempts = 0;
+    const save = async () => {
+      try { await useInterviewStore.getState().saveProgress(); if (!cancelled) setSaveError(false); }
+      catch {
+        if (cancelled) return;
+        if (++attempts < 5) timer = setTimeout(() => void save(), Math.min(1000 * 2 ** attempts, 8000));
+        else setSaveError(true);
+      }
+    };
+    timer = setTimeout(() => void save(), saveImmediately ? 0 : 400);
+    return () => { cancelled = true; clearTimeout(timer); };
+  }, [hydrated, snapshotKey, store.lockedContext, operationBusy, saveImmediately]);
   useEffect(() => {
-    const handleAbandon = () => {
-      const s = useInterviewStore.getState();
-      if (!s.lockedContext || s.isComplete) return;
-      const elapsed = s.interviewStartAt ? Date.now() - s.interviewStartAt : 0;
-      try {
-        analytics.interviewAbandoned(s.projectId ?? params.id, s.currentDomain, s.completedDomains.length, s.activeDomains.length, elapsed, "");
-      } catch {}
+    const abandon = () => {
+      const s = useInterviewStore.getState(); if (!s.lockedContext || s.isComplete) return;
+      try { analytics.interviewAbandoned(s.projectId ?? params.id, s.currentDomain, s.completedDomains.length, s.activeDomains.length, s.interviewStartAt ? Date.now() - s.interviewStartAt : 0, ''); } catch {}
     };
-    const onVisibility = () => {
-      if (document.visibilityState === "hidden") handleAbandon();
-    };
-    window.addEventListener("beforeunload", handleAbandon);
-    document.addEventListener("visibilitychange", onVisibility);
-    return () => {
-      window.removeEventListener("beforeunload", handleAbandon);
-      document.removeEventListener("visibilitychange", onVisibility);
-      // Component unmount (navigation away) also counts as abandon if not complete
-      handleAbandon();
-    };
+    window.addEventListener('beforeunload', abandon);
+    return () => { window.removeEventListener('beforeunload', abandon); abandon(); };
   }, [params.id]);
-
-  if (projectQuery.isLoading || !hydrated) {
-    return <InterviewSkeleton />;
-  }
-
-  if (projectQuery.error || !projectQuery.data) {
-    return <div className="min-h-[100dvh] grid place-items-center text-sm text-danger">Unable to load this project.</div>;
-  }
-
-  const projectType = projectQuery.data.type as ProjectType;
-
-  return (
-    <div className="flex flex-col h-[100dvh] overflow-hidden">
-      <header className="h-[52px] border-b border-hairline bg-sidebar-mist flex items-center px-4 md:px-7 gap-2.5 flex-shrink-0">
-        <span className="font-medium text-[14px] text-ink">DevDocs</span>
-        <span className="text-[13px] text-ink-muted hidden sm:inline">{projectQuery.data.name}</span>
-        <div className="ml-auto flex items-center gap-2">
-          {store.currentProvider && (
-            <span title="Per-project provider — stays on reload" className="text-[11px] px-2.5 py-1 rounded-full border border-vellum-border text-ink-faint bg-white hidden sm:inline">
-              {PROVIDER_LABELS[store.currentProvider] ?? store.currentProvider} <span className="opacity-60">· per-project</span>
-            </span>
-          )}
-            <span className="text-[11px] px-3 py-1 rounded-none font-medium bg-sidebar-mist border border-hairline text-ink">
-            {pct}%
-          </span>
-        </div>
-      </header>
-
-      {!store.lockedContext ? (
-        <div className="flex-1 flex items-center justify-center overflow-hidden bg-white">
-          <DiscoveryForm projectType={projectType} onSubmit={store.setLockedContext} />
-        </div>
-      ) : (
-        <>
-          {/* Desktop: three-panel layout */}
-          <div className="hidden md:flex flex-row h-[calc(100dvh-52px)] overflow-hidden">
-            <DomainProgress onRevisit={(id) => { const label = store.activeDomains.find(d=>d.id===id)?.label ?? id; toast(`Rewound to ${label}`, "info"); }} />
-            <ChatPanel />
-            <PreviewPanel />
-          </div>
-
-          {/* Mobile: chat only + bottom nav */}
-          <div className="flex md:hidden flex-col h-[calc(100dvh-52px-56px)] overflow-hidden">
-            <ChatPanel />
-          </div>
-
-          {/* Mobile bottom navigation */}
-          <div className="md:hidden h-14 border-t border-vellum-border bg-vellum flex items-center justify-around flex-shrink-0">
-            <button
-              type="button"
-              onClick={() => setDomainsSheet(true)}
-              className="flex flex-col items-center gap-0.5 text-ink-muted"
-            >
-              <svg width="20" height="20" viewBox="0 0 20 20" fill="none" className="text-ink-muted">
-                <path d="M3 5h14M3 10h14M3 15h14" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
-              </svg>
-              <span className="text-[10px]">Domains</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setPreviewSheet(true)}
-              className="flex flex-col items-center gap-0.5 text-ink-muted"
-            >
-              <svg width="20" height="20" viewBox="0 0 20 20" fill="none" className="text-ink-muted">
-                  <path d="M4 3h8l4 4v10a1 1 0 01-1 1H4a1 1 0 01-1-1V4a1 1 0 011-1z" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-                  <path d="M12 3v4h4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-                </svg>
-              <span className="text-[10px]">Document {store.completedDomains.length}/{store.activeDomains.length}</span>
-            </button>
-          </div>
-
-          {/* Bottom sheets for mobile */}
-          <BottomSheet open={domainsSheet} onClose={() => setDomainsSheet(false)} title="Interview Progress">
-            <DomainProgress onRevisit={(id) => { setDomainsSheet(false); const label = store.activeDomains.find(d=>d.id===id)?.label ?? id; toast(`Rewound to ${label}`, "info"); }} />
-          </BottomSheet>
-          <BottomSheet open={previewSheet} onClose={() => setPreviewSheet(false)} title="DOCUMENTATION.md">
-            <PreviewPanel />
-          </BottomSheet>
-        </>
-      )}
+  function closeDocumentation() { setDocumentationOpen(false); toggle.current?.focus(); }
+  function viewSection(domain: DomainId) { setSection(domain); setDocumentationOpen(true); }
+  if (projectQuery.error) return <div className="min-h-[100dvh] grid place-items-center"><div role="alert">Unable to load this project.<button type="button" onClick={() => void projectQuery.refetch()} className="block mt-3 underline">Try again</button></div></div>;
+  if (projectQuery.isLoading || !hydrated || !projectQuery.data) return <InterviewSkeleton />;
+  // Discovery keeps its approved layout; the replacement begins after setup.
+  if (!store.lockedContext) return <div className="flex flex-col h-[100dvh] overflow-hidden">
+    <header className="h-[52px] border-b border-hairline bg-sidebar-mist flex items-center px-4 md:px-7 gap-2.5 flex-shrink-0">
+      <span className="font-medium text-[14px] text-ink">DevDocs</span>
+      <span className="text-[13px] text-ink-muted hidden sm:inline">{projectQuery.data.name}</span>
+      <div className="ml-auto flex items-center gap-2">
+        {store.currentProvider && <span title="Per-project provider — stays on reload" className="text-[11px] px-2.5 py-1 rounded-full border border-vellum-border text-ink-faint bg-white hidden sm:inline">
+          {{ anthropic: 'Anthropic', openai: 'OpenAI', bedrock: 'Bedrock', metamuse: 'Meta Muse' }[store.currentProvider]} <span className="opacity-60">· per-project</span>
+        </span>}
+        <span className="text-[11px] px-3 py-1 rounded-none font-medium bg-sidebar-mist border border-hairline text-ink">Project setup</span>
+      </div>
+    </header>
+    <div className="flex-1 flex items-center justify-center overflow-hidden bg-white">
+      <DiscoveryForm projectType={projectQuery.data.type as ProjectType} onSubmit={store.setLockedContext} />
     </div>
-  );
+  </div>;
+  const provider = store.currentProvider ?? 'anthropic';
+  const model = provider === 'bedrock' ? bedrockModel ?? 'Bedrock model unavailable' : PROVIDER_MODELS[provider].label;
+  const savedCount = Object.keys(store.domainContent).length;
+  return <div className={styles.page}>
+    <header className={styles.header}>
+      <div className={styles.brand}><Link href="/dashboard">DevDocs AI</Link><span className={styles.projectName}>{projectQuery.data.name}</span></div>
+      <div className={styles.headerControls}>
+        <div className={styles.provider}>Project model
+          <span className={styles.model} aria-label="Configured model and provider">{model} · {provider === 'metamuse' ? 'Meta' : provider}</span>
+        </div>
+        <button ref={toggle} className={styles.toggle} type="button" aria-label={`Documentation: ${documentationOpen ? 'close' : 'open'} panel${savedCount > 0 ? ` (${savedCount} saved sections)` : ''}`} aria-expanded={documentationOpen} aria-controls="interview-documentation" onClick={() => documentationOpen ? closeDocumentation() : setDocumentationOpen(true)}>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true" focusable="false"><rect x="3" y="4" width="18" height="16" rx="2" /><path d="M15 4v16" /></svg>
+          <span>Documentation{savedCount > 0 ? ` (${savedCount})` : ''}</span>
+        </button>
+      </div>
+    </header>
+    {saveError && <div className={styles.error} role="alert">Interview progress could not be synced. <button type="button" onClick={() => void store.saveProgress().then(() => setSaveError(false)).catch(() => setSaveError(true))}>Retry saving progress</button></div>}
+      <div className={`${styles.layout} ${documentationOpen ? styles.withDocs : ''}`}>
+        <ProjectPlan onViewSection={viewSection} />
+        <QuestionPanel onViewSection={viewSection} />
+        {documentationOpen && <DocumentationPanel selected={section} onSelect={setSection} onClose={closeDocumentation} />}
+      </div>
+  </div>;
 }

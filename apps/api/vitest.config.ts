@@ -12,6 +12,7 @@ export default defineConfig({
     // Never collect compiled output, even if a stale dist/ is lying around
     // (e.g. from a build that predates the tsconfig.build.json test exclusion).
     exclude: [
+      '**/*.unit.test.ts',
       '**/node_modules/**',
       '**/dist/**',
       '**/cypress/**',

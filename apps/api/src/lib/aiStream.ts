@@ -1,7 +1,8 @@
 // apps/api/src/lib/aiStream.ts
 // Server-side AI streaming — identical interface to the browser version
-// but without dangerouslyAllowBrowser. Runs inside the Express process.
-import type { AIProvider } from "@devdocs/shared";
+// but without dangerouslyAllowBrowser. Runs inside the Hono process.
+import { META_MUSE_MAX_COMPLETION_TOKENS, type AIProvider } from "@devdocs/shared";
+import { logger } from './logger';
 
 export interface AIConfig {
   provider: AIProvider;
@@ -87,7 +88,11 @@ async function streamAnthropic(
       callbacks.onToken(delta);
     });
 
-    await stream.finalMessage();
+    const final = await stream.finalMessage();
+    if (final.stop_reason !== 'end_turn' && final.stop_reason !== 'stop_sequence') {
+      callbacks.onError('unknown', 'The AI response was incomplete. Please retry with a narrower request.');
+      return;
+    }
     await callbacks.onDone(accumulated);
   } catch (err: unknown) {
     if (isAbort(err)) return;
@@ -108,6 +113,7 @@ async function streamOpenAI(
     const client = new OpenAI({ apiKey: config.apiKey });
     let   accumulated = "";
 
+    let finishReason: string | null = null;
     const stream = await client.chat.completions.create(
       {
         model:      config.model,
@@ -119,6 +125,7 @@ async function streamOpenAI(
     );
 
     for await (const chunk of stream) {
+      finishReason = chunk.choices[0]?.finish_reason ?? finishReason;
       const delta = chunk.choices[0]?.delta?.content ?? "";
       if (delta) {
         accumulated += delta;
@@ -126,6 +133,10 @@ async function streamOpenAI(
       }
     }
 
+    if (finishReason !== 'stop') {
+      callbacks.onError('unknown', 'The AI response was incomplete. Please retry with a narrower request.');
+      return;
+    }
     await callbacks.onDone(accumulated);
   } catch (err: unknown) {
     if (isAbort(err)) return;
@@ -149,10 +160,14 @@ async function streamMetaMuse(
     });
     let accumulated = "";
 
+    let finishReason: string | null = null;
+    let usage: { promptTokens?: number; completionTokens?: number; reasoningTokens?: number } = {};
     const stream = await client.chat.completions.create(
       {
         model:      config.model,
-        max_tokens: 2000,
+        max_completion_tokens: META_MUSE_MAX_COMPLETION_TOKENS,
+        reasoning_effort: 'low',
+        stream_options: { include_usage: true },
         stream:     true,
         messages: buildOpenAIMessages(systemPrompt, history, userMessage),
       },
@@ -160,6 +175,12 @@ async function streamMetaMuse(
     );
 
     for await (const chunk of stream) {
+      if (chunk.usage) usage = {
+        promptTokens: chunk.usage.prompt_tokens,
+        completionTokens: chunk.usage.completion_tokens,
+        reasoningTokens: chunk.usage.completion_tokens_details?.reasoning_tokens,
+      };
+      finishReason = chunk.choices[0]?.finish_reason ?? finishReason;
       const delta = chunk.choices[0]?.delta?.content ?? "";
       if (delta) {
         accumulated += delta;
@@ -167,6 +188,15 @@ async function streamMetaMuse(
       }
     }
 
+    logger.info({ provider: 'metamuse', model: config.model, finishReason, contentChars: accumulated.length, ...usage }, 'Meta Muse stream completed');
+    if (finishReason !== 'stop') {
+      callbacks.onError('unknown', 'The AI response was incomplete. Please retry with a narrower request.');
+      return;
+    }
+    if (!accumulated.trim()) {
+      callbacks.onError('unknown', 'Meta Muse returned an empty response. Please retry.');
+      return;
+    }
     await callbacks.onDone(accumulated);
   } catch (err: unknown) {
     if (isAbort(err)) return;
@@ -206,7 +236,11 @@ async function streamBedrock(
       callbacks.onToken(delta);
     });
 
-    await stream.finalMessage();
+    const final = await stream.finalMessage();
+    if (final.stop_reason !== 'end_turn' && final.stop_reason !== 'stop_sequence') {
+      callbacks.onError('unknown', 'The AI response was incomplete. Please retry with a narrower request.');
+      return;
+    }
     await callbacks.onDone(accumulated);
   } catch (err: unknown) {
     if (isAbort(err)) return;
@@ -255,6 +289,9 @@ function mapBedrockError(err: unknown): ErrorTuple {
 
 function mapMetaMuseError(err: unknown): ErrorTuple {
   const msg = err instanceof Error ? err.message : String(err);
+  const status = (err as { status?: number } | null)?.status;
+  if (status === 404 || /^404\b/.test(msg))
+    return ["model_unavailable", "The Meta Muse text model is unavailable for this API key. Enable Muse Spark access in your Meta developer project, then retry, or choose another configured provider in Settings."];
   if (msg.includes("401") || msg.includes("Incorrect API key"))
     return ["auth",       "Meta Muse API key invalid or revoked."];
   if (msg.includes("429") || msg.includes("rate"))

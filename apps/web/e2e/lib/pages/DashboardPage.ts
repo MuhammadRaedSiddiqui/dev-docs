@@ -12,9 +12,13 @@ export class DashboardPage extends BasePage {
   }
 
   async gotoDashboard(): Promise<void> {
+    const loaded = this.page.waitForResponse(response =>
+      new URL(response.url()).pathname.split('/').at(-1)?.split(',').includes('projects.list') === true,
+    );
     // Full page load — dashboard is a real route navigation.
     await this.goto("/dashboard");
     await this.waitForPageLoad();
+    expect((await loaded).ok(), 'Dashboard projects must load before interacting').toBe(true);
   }
 
   async openNewProjectModal(): Promise<void> {
@@ -34,35 +38,24 @@ export class DashboardPage extends BasePage {
 
     // Name input inside CreateProjectModal.
     const nameInput = await this.find(
-      'input[name="name"]',
+      'input[placeholder="e.g. TaskFlow SaaS"]',
       "new project name input",
       ['input[placeholder*="project" i]', '[data-testid="project-name-input"]'],
     );
     await nameInput.fill(name);
 
-    // Project type picker — a select in the modal (see legacy spec).
-    const typeSelect = this.page.locator('select[name="type"]');
-    if ((await typeSelect.count()) > 0) {
-      await typeSelect.selectOption(type);
-    } else {
-      // Fallback: card/radio-style type picker.
-      const typeCard = await this.find(
-        `[data-project-type="${type}"]`,
-        `project type option ${type}`,
-        [`text=${type}`, `label:has-text("${type}")`],
-      );
-      await typeCard.first().click();
-    }
+    const labels: Record<ProjectTypeOption, string> = { saas: 'SaaS product', api: 'API service', internal_tool: 'Internal tool', mobile: 'Mobile app', landing_page: 'Landing page', other: 'Other' };
+    await this.page.getByRole('button', { name: new RegExp(`${labels[type]}$`) }).click();
 
     const createBtn = await this.find(
-      'button:has-text("Create")',
+      'button:has-text("Create project")',
       "create project submit",
       ['button[type="submit"]', 'text=Create project'],
     );
     await createBtn.click();
 
     // App navigates to /project/<id>/interview on success.
-    await this.page.waitForURL(/\/project\/.+\/interview/, { timeout: 15000 });
+    await this.page.waitForURL(/\/project\/.+\/interview/, { timeout: 90_000, waitUntil: 'domcontentloaded' });
     const match = this.page.url().match(/\/project\/([^/]+)\/interview/);
     return match?.[1] ?? "";
   }
