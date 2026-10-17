@@ -179,7 +179,8 @@ Vercel hosts this monorepo as two projects linked to `main`:
 - `dev-docs-api`: root `apps/api`, Hono, https://dev-docs-api.vercel.app.
 
 Both projects include source files outside their root directory for workspace
-dependencies and use `pnpm install --frozen-lockfile`. Production environment
+dependencies and use `pnpm install --frozen-lockfile`. The API adds `--prod=false`
+to install its TypeScript build tools even with `NODE_ENV=production`. Production environment
 variables are stored in Vercel. The web app's `NEXT_PUBLIC_API_URL` points to the
 API, and the API's `WEB_URL` points to the web app for CORS. The API uses
 `src/app.ts` as its Vercel entry point; `src/hono-server.ts` remains the standalone
