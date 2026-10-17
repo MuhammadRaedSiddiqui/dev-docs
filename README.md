@@ -183,8 +183,9 @@ dependencies and use `pnpm install --frozen-lockfile`. The API adds `--prod=fals
 to install its TypeScript build tools even with `NODE_ENV=production`. Production environment
 variables are stored in Vercel. The web app's `NEXT_PUBLIC_API_URL` points to the
 API, and the API's `WEB_URL` points to the web app for CORS. The API uses
-`src/app.ts` as its Vercel entry point; `src/hono-server.ts` remains the standalone
-Node.js entry point. Keep authentication enabled on both hosts.
+`src/app.ts` as its Vercel entry point, bundled to `dist/app.cjs` by the API build;
+`src/hono-server.ts` remains the standalone Node.js entry point. Keep
+authentication enabled on both hosts.
 
 The web app also supports other Next.js hosts. The API can run on Railway,
 Fly.io, or any Node.js host:

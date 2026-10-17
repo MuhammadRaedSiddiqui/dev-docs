@@ -340,6 +340,7 @@ hashes.
 Vercel uses two Git-linked projects: `dev-docs` (root `apps/web`, Next.js) and
 `dev-docs-api` (root `apps/api`, Hono). Both include workspace sources outside
 their root. `apps/api/src/app.ts` exports the Hono application for Vercel;
+the API build bundles it to `dist/app.cjs`, which Vercel loads from `dist`.
 `hono-server.ts` remains the standalone listener. Production environment values
 are managed in Vercel, with matching web/API URLs for CORS. Never upload local
 environment files or test authentication state as deployment source.
