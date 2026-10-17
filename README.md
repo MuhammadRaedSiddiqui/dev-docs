@@ -173,8 +173,20 @@ placement and vertical shifting.
 
 ## Deployment
 
-The web app can be deployed to Vercel or another Next.js host. The API can run
-on Railway, Fly.io, or any Node.js host:
+Vercel hosts this monorepo as two projects linked to `main`:
+
+- `dev-docs`: root `apps/web`, Next.js, https://dev-docs-ebon.vercel.app.
+- `dev-docs-api`: root `apps/api`, Hono, https://dev-docs-api.vercel.app.
+
+Both projects include source files outside their root directory for workspace
+dependencies and use `pnpm install --frozen-lockfile`. Production environment
+variables are stored in Vercel. The web app's `NEXT_PUBLIC_API_URL` points to the
+API, and the API's `WEB_URL` points to the web app for CORS. The API uses
+`src/app.ts` as its Vercel entry point; `src/hono-server.ts` remains the standalone
+Node.js entry point. Keep authentication enabled on both hosts.
+
+The web app also supports other Next.js hosts. The API can run on Railway,
+Fly.io, or any Node.js host:
 
 ```bash
 pnpm --filter @devdocs/api build

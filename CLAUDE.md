@@ -337,6 +337,13 @@ hashes.
 
 ## Deployment
 
+Vercel uses two Git-linked projects: `dev-docs` (root `apps/web`, Next.js) and
+`dev-docs-api` (root `apps/api`, Hono). Both include workspace sources outside
+their root. `apps/api/src/app.ts` exports the Hono application for Vercel;
+`hono-server.ts` remains the standalone listener. Production environment values
+are managed in Vercel, with matching web/API URLs for CORS. Never upload local
+environment files or test authentication state as deployment source.
+
 Build the web and API from the monorepo. Apply committed database migrations as
 a release step before shifting traffic. Configure the API host with
 `DATABASE_URL`, Clerk keys, `ENCRYPTION_KEY`, `WEB_URL`, and optional Redis,
